@@ -25,7 +25,7 @@ const GROUPS = {
 
 const PHASES = [
   {id:'groups',label:'Fase de Grupos',short:'Grupos',icon:'⚽',deadline:'2026-06-11T17:00:00'},
-  {id:'r32',label:'Dieciseisavos',short:'1/32',icon:'🔵',deadline:'2026-07-01T17:00:00',pts:2},
+  {id:'r32',label:'Dieciseisavos de Final',short:'1/16F',icon:'🔵',deadline:'2026-07-01T17:00:00',pts:2},
   {id:'r16',label:'Octavos de Final',short:'Octavos',icon:'🟡',deadline:'2026-07-05T17:00:00',pts:3},
   {id:'qf',label:'Cuartos de Final',short:'Cuartos',icon:'🟠',deadline:'2026-07-09T17:00:00',pts:4},
   {id:'sf',label:'Semifinales',short:'Semis',icon:'🔴',deadline:'2026-07-13T17:00:00',pts:5},
@@ -99,6 +99,52 @@ function Logo({small}){
         <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:small?17:22,letterSpacing:2,color:C.text,lineHeight:1}}>La<span style={{color:C.accent}}>V</span>iuda</div>
         <div style={{fontSize:small?9:10,color:C.textMuted,letterSpacing:3,textTransform:'uppercase',lineHeight:1.2}}>World Cup Challenge 2026</div>
       </div>
+    </div>
+  )
+}
+
+function Rules(){
+  const sections=[
+    {icon:'📋',title:'¿En qué consiste?',text:'Cada participante hace sus predicciones antes de que empiece cada fase. Cuantos más aciertos, más puntos. Al final del torneo gana quien más puntos haya acumulado.'},
+    {icon:'⏳',title:'Plazos',text:'Las apuestas se cierran automáticamente 1 hora antes del primer partido de cada fase. Una vez cerrada la fase, no se pueden modificar las predicciones.'},
+    {icon:'⚽',title:'Fase de Grupos',content:[
+      {label:'1º clasificado exacto',pts:'+3 pts',color:C.gold},
+      {label:'2º clasificado exacto',pts:'+2 pts',color:C.silver},
+      {label:'Equipo clasificado (sin importar el orden)',pts:'+1 pt',color:C.text},
+    ]},
+    {icon:'🔵',title:'Dieciseisavos de Final',content:[{label:'Acertar el clasificado de cada partido',pts:'+2 pts',color:C.blue}]},
+    {icon:'🟡',title:'Octavos de Final',content:[{label:'Acertar el clasificado de cada partido',pts:'+3 pts',color:C.gold}]},
+    {icon:'🟠',title:'Cuartos de Final',content:[{label:'Acertar el clasificado de cada partido',pts:'+4 pts',color:C.accentHover}]},
+    {icon:'🔴',title:'Semifinales',content:[{label:'Acertar el clasificado de cada partido',pts:'+5 pts',color:C.accent}]},
+    {icon:'🏆',title:'Final',content:[
+      {label:'Campeón del mundo',pts:'+10 pts',color:C.gold},
+      {label:'Subcampeón',pts:'+5 pts',color:C.silver},
+      {label:'3er puesto',pts:'+5 pts',color:C.text},
+    ]},
+    {icon:'💡',title:'Consejos',text:'Las fases eliminatorias dependen de los resultados reales de la fase anterior, así que los enfrentamientos se irán desbloqueando progresivamente. ¡Atentos a los plazos!'},
+  ]
+  return(
+    <div style={{display:'flex',flexDirection:'column',gap:14}}>
+      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:22,color:C.text,marginBottom:4}}>Reglas del juego</div>
+      {sections.map((s,i)=>(
+        <Card key={i} style={{padding:'14px 16px'}}>
+          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:s.text||s.content?10:0}}>
+            <span style={{fontSize:20}}>{s.icon}</span>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:C.text}}>{s.title}</div>
+          </div>
+          {s.text&&<div style={{fontSize:13,color:C.textMuted,lineHeight:1.6}}>{s.text}</div>}
+          {s.content&&(
+            <div style={{display:'flex',flexDirection:'column',gap:8}}>
+              {s.content.map((c,j)=>(
+                <div key={j} style={{display:'flex',alignItems:'center',justifyContent:'space-between',background:C.surfaceHigh,borderRadius:8,padding:'8px 12px'}}>
+                  <div style={{fontSize:13,color:C.textMuted,flex:1}}>{c.label}</div>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:16,color:c.color,marginLeft:10}}>{c.pts}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      ))}
     </div>
   )
 }
@@ -361,7 +407,12 @@ export default function App(){
   const userBets=betsMap[session.id]||{}
   const phase=PHASES.find(p=>p.id===activePhase)
   const closed=isClosed(phase?.deadline||'')
-  const TABS=[{id:'ranking',label:'Ranking',icon:'🏆'},{id:'bets',label:'Mis apuestas',icon:'⚽'},...(session.role==='admin'?[{id:'admin',label:'Admin',icon:'⚙'}]:[])]
+  const TABS=[
+    {id:'ranking',label:'Ranking',icon:'🏆'},
+    {id:'bets',label:'Apuestas',icon:'⚽'},
+    {id:'rules',label:'Reglas',icon:'📋'},
+    ...(session.role==='admin'?[{id:'admin',label:'Admin',icon:'⚙'}]:[]),
+  ]
 
   return(
     <div style={{minHeight:'100vh',background:C.bg,paddingBottom:72}}>
@@ -375,6 +426,7 @@ export default function App(){
       </header>
       <main style={{maxWidth:560,margin:'0 auto',padding:'16px 14px'}}>
         {activeTab==='ranking'&&<Leaderboard users={users} betsMap={betsMap} results={results} currentUserId={session.id}/>}
+        {activeTab==='rules'&&<Rules/>}
         {activeTab==='bets'&&(
           <>
             <div style={{display:'flex',overflowX:'auto',gap:6,marginBottom:16,paddingBottom:4,scrollbarWidth:'none'}}>
@@ -393,7 +445,7 @@ export default function App(){
       </main>
       <nav style={{position:'fixed',bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:'flex',justifyContent:'center',zIndex:100}}>
         {TABS.map(t=>(
-          <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{flex:1,maxWidth:180,padding:'9px 0 11px',border:'none',background:activeTab===t.id?`${C.accent}1a`:'transparent',color:activeTab===t.id?C.accentHover:C.textMuted,cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:3,borderTop:`2px solid ${activeTab===t.id?C.accent:'transparent'}`,transition:'all .15s'}}>
+          <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{flex:1,maxWidth:160,padding:'9px 0 11px',border:'none',background:activeTab===t.id?`${C.accent}1a`:'transparent',color:activeTab===t.id?C.accentHover:C.textMuted,cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:3,borderTop:`2px solid ${activeTab===t.id?C.accent:'transparent'}`,transition:'all .15s'}}>
             <span style={{fontSize:18}}>{t.icon}</span>
             <span style={{fontSize:10,fontWeight:800,letterSpacing:1,fontFamily:"'Barlow Condensed',sans-serif"}}>{t.label}</span>
           </button>
