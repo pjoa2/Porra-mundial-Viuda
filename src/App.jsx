@@ -75,35 +75,23 @@ function getSFLosers(results){
   const qfWinners=Object.values(results?.qf||{}).filter(Boolean)
   return qfWinners.filter(t=>!sfWinners.includes(t)).slice(0,2)
 }
-
-// A phase is "visible" (bets can be seen) if deadline passed OR results are complete
-function isPhaseVisible(phaseId, results){
-  if(isClosed(PHASES.find(p=>p.id===phaseId)?.deadline||'')) return true
-  const r=results?.[phaseId]
-  if(!r) return false
-  if(phaseId==='groups') return Object.keys(GROUPS).every(g=>r[g]&&r[g][0]&&r[g][1])
-  if(phaseId==='third') return !!r.winner
-  if(phaseId==='final') return !!(r.winner&&r.runnerUp)
-  return Object.keys(r).length>0 && Object.values(r).every(Boolean)
+function isPhaseVisible(phaseId,results){
+  if(isClosed(PHASES.find(p=>p.id===phaseId)?.deadline||''))return true
+  const r=results?.[phaseId];if(!r)return false
+  if(phaseId==='groups')return Object.keys(GROUPS).every(g=>r[g]&&r[g][0]&&r[g][1])
+  if(phaseId==='third')return!!r.winner
+  if(phaseId==='final')return!!(r.winner&&r.runnerUp)
+  return Object.keys(r).length>0&&Object.values(r).every(Boolean)
 }
-
-// A phase is unlocked for betting if previous phase results are complete
-function isPhaseUnlocked(phaseId, results){
+function isPhaseUnlocked(phaseId,results){
   const prev={r32:'groups',r16:'r32',qf:'r16',sf:'qf',third:'sf',final:'sf'}[phaseId]
-  if(!prev) return true
-  return isPhaseVisible(prev, results)
+  if(!prev)return true
+  return isPhaseVisible(prev,results)
 }
-
 function simulatePhase(phaseId,currentResults){
   const r=JSON.parse(JSON.stringify(currentResults||{}))
   if(phaseId==='groups'){r.groups={};Object.entries(GROUPS).forEach(([g,teams])=>{const s=shuffle(teams);r.groups[g]=[s[0],s[1]]});return r}
-  if(phaseId==='r32'){
-    if(!r.groups)return r
-    const teams=[];Object.keys(GROUPS).forEach(g=>{teams.push(r.groups[g]?.[0]||`1º Grupo ${g}`);teams.push(r.groups[g]?.[1]||`2º Grupo ${g}`)})
-    for(let i=0;i<8;i++)teams.push(shuffle(Object.values(GROUPS).map(t=>t[2]))[i])
-    r.r32={};for(let i=0;i<teams.length;i+=2){if(teams[i+1])r.r32[`m${i}`]=shuffle([teams[i],teams[i+1]])[0]}
-    return r
-  }
+  if(phaseId==='r32'){if(!r.groups)return r;const teams=[];Object.keys(GROUPS).forEach(g=>{teams.push(r.groups[g]?.[0]||`1º Grupo ${g}`);teams.push(r.groups[g]?.[1]||`2º Grupo ${g}`)});for(let i=0;i<8;i++)teams.push(shuffle(Object.values(GROUPS).map(t=>t[2]))[i]);r.r32={};for(let i=0;i<teams.length;i+=2){if(teams[i+1])r.r32[`m${i}`]=shuffle([teams[i],teams[i+1]])[0]};return r}
   if(phaseId==='r16'){if(!r.r32)return r;const teams=Object.values(r.r32).filter(Boolean);r.r16={};for(let i=0;i<teams.length;i+=2){if(teams[i+1])r.r16[`m${i}`]=shuffle([teams[i],teams[i+1]])[0]};return r}
   if(phaseId==='qf'){if(!r.r16)return r;const teams=Object.values(r.r16).filter(Boolean);r.qf={};for(let i=0;i<teams.length;i+=2){if(teams[i+1])r.qf[`m${i}`]=shuffle([teams[i],teams[i+1]])[0]};return r}
   if(phaseId==='sf'){if(!r.qf)return r;const teams=Object.values(r.qf).filter(Boolean);r.sf={};for(let i=0;i<teams.length;i+=2){if(teams[i+1])r.sf[`m${i}`]=shuffle([teams[i],teams[i+1]])[0]};return r}
@@ -111,17 +99,13 @@ function simulatePhase(phaseId,currentResults){
   if(phaseId==='final'){if(!r.sf)return r;const finalists=shuffle(Object.values(r.sf).filter(Boolean));r.final={winner:finalists[0]||'',runnerUp:finalists[1]||''};return r}
   return r
 }
-
 function resetPhase(phaseId,currentResults){
   const r=JSON.parse(JSON.stringify(currentResults||{}))
-  delete r[phaseId]
-  if(phaseId==='groups') r.groups={}
+  delete r[phaseId];if(phaseId==='groups')r.groups={}
   return r
 }
-
 function calcScore(userBets,results,scoring){
-  const S={...DEFAULT_SCORING,...scoring}
-  let total=0;const breakdown=[]
+  const S={...DEFAULT_SCORING,...scoring};let total=0;const breakdown=[]
   if(userBets?.groups&&results?.groups){
     let pts=0
     Object.keys(GROUPS).forEach(g=>{
@@ -177,25 +161,38 @@ function Logo({small}){
   )
 }
 
-// ── USER BETS VIEWER ─────────────────────────────────────────────────────────
-function UserBetsViewer({user, bets, results, scoring, onBack}){
+function PendingScreen({user,onLogout}){
+  return(
+    <div style={{minHeight:'100vh',background:C.bg,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:20}}>
+      <div style={{maxWidth:400,width:'100%',textAlign:'center',display:'flex',flexDirection:'column',gap:20}}>
+        <Logo/>
+        <Card style={{padding:28}}>
+          <div style={{fontSize:40,marginBottom:16}}>⏳</div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:22,color:C.text,marginBottom:10}}>Cuenta pendiente</div>
+          <div style={{fontSize:14,color:C.textMuted,lineHeight:1.6,marginBottom:20}}>
+            Hola <b style={{color:C.text}}>{user.display_name||user.name}</b>, tu cuenta está pendiente de aprobación por el administrador. En cuanto te apruebe podrás acceder a la porra.
+          </div>
+          <Btn onClick={onLogout} variant='ghost' full>Cerrar sesión</Btn>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+function UserBetsViewer({user,bets,results,scoring,onBack}){
   const[activePhase,setActivePhase]=useState('groups')
   const S={...DEFAULT_SCORING,...scoring}
-
   function GroupsView(){
     const gb=bets?.groups||{}
     return(
       <div style={{display:'flex',flexDirection:'column',gap:10}}>
-        {Object.entries(GROUPS).map(([g,teams])=>{
-          const bet=gb[g]||[]
-          const real=results?.groups?.[g]||[]
+        {Object.entries(GROUPS).map(([g])=>{
+          const bet=gb[g]||[],real=results?.groups?.[g]||[]
           return(
             <Card key={g} style={{padding:'12px 15px'}}>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:14,color:C.accent,marginBottom:8,letterSpacing:1.5}}>GRUPO {g}</div>
               {[0,1].map(pos=>{
-                const team=bet[pos]
-                const correct=real[pos]&&team===real[pos]
-                const partial=!correct&&team&&real.slice(0,2).includes(team)
+                const team=bet[pos],correct=real[pos]&&team===real[pos],partial=!correct&&team&&real.slice(0,2).includes(team)
                 return(
                   <div key={pos} style={{display:'flex',alignItems:'center',gap:8,marginBottom:pos===0?6:0,background:C.surfaceHigh,borderRadius:8,padding:'7px 10px'}}>
                     <span style={{fontSize:14}}>{pos===0?'🥇':'🥈'}</span>
@@ -212,10 +209,8 @@ function UserBetsViewer({user, bets, results, scoring, onBack}){
       </div>
     )
   }
-
   function KnockoutView({phaseId}){
-    const pb=bets?.[phaseId]||{}
-    const ppts=S[phaseId]||0
+    const pb=bets?.[phaseId]||{},ppts=S[phaseId]||0
     const prev={r32:'groups',r16:'r32',qf:'r16',sf:'qf'}[phaseId]
     let teams=[]
     if(phaseId==='r32'){Object.keys(GROUPS).forEach(g=>{const r=results?.groups?.[g]||[];teams.push(r[0]||`1º Grupo ${g}`);teams.push(r[1]||`2º Grupo ${g}`)});for(let i=0;i<8;i++)teams.push(`Mejor 3º #${i+1}`)}
@@ -225,9 +220,7 @@ function UserBetsViewer({user, bets, results, scoring, onBack}){
     return(
       <div style={{display:'flex',flexDirection:'column',gap:10}}>
         {matches.map((m,idx)=>{
-          const bet=pb[m.id]
-          const real=results?.[phaseId]?.[m.id]
-          const correct=bet&&real&&bet===real
+          const bet=pb[m.id],real=results?.[phaseId]?.[m.id],correct=bet&&real&&bet===real
           return(
             <Card key={m.id} style={{padding:'12px 15px'}}>
               <div style={{fontSize:11,color:C.textMuted,marginBottom:8,letterSpacing:1}}>PARTIDO {idx+1}</div>
@@ -243,12 +236,8 @@ function UserBetsViewer({user, bets, results, scoring, onBack}){
       </div>
     )
   }
-
   function ThirdView(){
-    const bet=bets?.third?.winner
-    const real=results?.third?.winner
-    const correct=bet&&real&&bet===real
-    const losers=getSFLosers(results)
+    const bet=bets?.third?.winner,real=results?.third?.winner,correct=bet&&real&&bet===real
     return(
       <Card style={{padding:'13px 15px'}}>
         <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:C.text,marginBottom:10}}>🥉 Ganador 3er puesto</div>
@@ -261,15 +250,12 @@ function UserBetsViewer({user, bets, results, scoring, onBack}){
       </Card>
     )
   }
-
   function FinalView(){
     const fb=bets?.final||{}
     return(
       <div style={{display:'flex',flexDirection:'column',gap:10}}>
         {[{field:'winner',label:'🏆 Campeón',pts:S.final_winner},{field:'runnerUp',label:'🥈 Subcampeón',pts:S.final_runner}].map(({field,label,pts})=>{
-          const bet=fb[field]
-          const real=results?.final?.[field]
-          const correct=bet&&real&&bet===real
+          const bet=fb[field],real=results?.final?.[field],correct=bet&&real&&bet===real
           return(
             <Card key={field} style={{padding:'12px 15px'}}>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:14,color:C.text,marginBottom:8}}>{label}</div>
@@ -285,9 +271,7 @@ function UserBetsViewer({user, bets, results, scoring, onBack}){
       </div>
     )
   }
-
   const visiblePhases=PHASES.filter(p=>isPhaseVisible(p.id,results))
-
   return(
     <div style={{display:'flex',flexDirection:'column',gap:14}}>
       <div style={{display:'flex',alignItems:'center',gap:10}}>
@@ -297,11 +281,7 @@ function UserBetsViewer({user, bets, results, scoring, onBack}){
           {user.display_name&&<div style={{fontSize:11,color:C.textDim}}>@{user.name}</div>}
         </div>
       </div>
-
-      {visiblePhases.length===0&&(
-        <Card><div style={{color:C.textMuted,textAlign:'center',padding:20}}>Las apuestas se mostrarán cuando comience cada fase</div></Card>
-      )}
-
+      {visiblePhases.length===0&&<Card><div style={{color:C.textMuted,textAlign:'center',padding:20}}>Las apuestas se mostrarán cuando comience cada fase</div></Card>}
       {visiblePhases.length>0&&(
         <>
           <div style={{display:'flex',overflowX:'auto',gap:6,paddingBottom:4,scrollbarWidth:'none'}}>
@@ -348,10 +328,10 @@ function Rules(){
       {[
         {icon:'📋',title:'¿En qué consiste?',text:'Cada participante hace sus predicciones antes de que empiece cada fase. Cuantos más aciertos, más puntos. Al final del torneo gana quien más puntos haya acumulado.'},
         {icon:'⏳',title:'Plazos',text:'Las apuestas se cierran automáticamente 1 hora antes del primer partido de cada fase. Una vez cerrada la fase, no se pueden modificar las predicciones.'},
-        {icon:'🔓',title:'Desbloqueo de fases',text:'Cada fase eliminatoria se desbloquea cuando el administrador introduce todos los resultados de la fase anterior. Así todos tienen la misma información antes de apostar.'},
+        {icon:'🔓',title:'Desbloqueo de fases',text:'Cada fase eliminatoria se desbloquea cuando el administrador introduce todos los resultados de la fase anterior.'},
         {icon:'👁',title:'Ver apuestas de otros',text:'Las apuestas de cada participante se pueden ver una vez que la fase ha comenzado o el administrador ha introducido todos sus resultados.'},
-        {icon:'📈',title:'Puntuación progresiva',text:'Cada fase vale más puntos que la anterior. La Final tiene tanto peso que cualquiera puede remontar hasta el último momento. Consulta la pestaña Puntos para ver el detalle.'},
-        {icon:'💡',title:'Consejos',text:'¡Atentos a los plazos! Una vez cerrada la fase ya no podréis modificar vuestras predicciones.'},
+        {icon:'✅',title:'Acceso',text:'El registro está sujeto a aprobación del administrador. Una vez aprobado recibirás acceso completo a la porra.'},
+        {icon:'📈',title:'Puntuación progresiva',text:'Cada fase vale más puntos que la anterior. La Final tiene tanto peso que cualquiera puede remontar hasta el último momento.'},
       ].map((s,i)=>(
         <Card key={i} style={{padding:'14px 16px'}}>
           <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}><span style={{fontSize:20}}>{s.icon}</span><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:C.text}}>{s.title}</div></div>
@@ -418,6 +398,7 @@ function LoginScreen({onLogin}){
   const[name,setName]=useState('')
   const[pass,setPass]=useState('')
   const[pass2,setPass2]=useState('')
+  const[realName,setRealName]=useState('')
   const[err,setErr]=useState('')
   const[loading,setLoading]=useState(false)
   async function doLogin(){
@@ -429,12 +410,19 @@ function LoginScreen({onLogin}){
   }
   async function doRegister(){
     setErr('');setLoading(true)
-    if(!name.trim()){setErr('Escribe tu nombre');setLoading(false);return}
+    if(!name.trim()){setErr('Escribe tu nombre de usuario');setLoading(false);return}
+    if(!realName.trim()){setErr('Escribe tu nombre real para que el admin te identifique');setLoading(false);return}
     if(pass.length<4){setErr('Mínimo 4 caracteres');setLoading(false);return}
     if(pass!==pass2){setErr('Las contraseñas no coinciden');setLoading(false);return}
     const{data:existing}=await supabase.from('porra_users').select('id').ilike('name',name.trim()).single()
     if(existing){setErr('Ese nombre ya está en uso');setLoading(false);return}
-    const{data,error}=await supabase.from('porra_users').insert({name:name.trim(),password_hash:hashPassword(pass),role:'user'}).select().single()
+    const{data,error}=await supabase.from('porra_users').insert({
+      name:name.trim(),
+      password_hash:hashPassword(pass),
+      role:'user',
+      status:'pending',
+      display_name:realName.trim(),
+    }).select().single()
     if(error){setErr('Error al crear cuenta');setLoading(false);return}
     localStorage.setItem('porra_user',JSON.stringify(data));onLogin(data);setLoading(false)
   }
@@ -448,21 +436,32 @@ function LoginScreen({onLogin}){
         </div>
         <Card>
           <div style={{display:'flex',flexDirection:'column',gap:14}}>
-            <div><div style={{fontSize:11,color:C.textMuted,marginBottom:6,letterSpacing:1,textTransform:'uppercase'}}>Nombre</div><Input value={name} onChange={e=>setName(e.target.value)} onKeyDown={onKey} placeholder="Tu nombre"/></div>
+            {tab==='register'&&(
+              <div>
+                <div style={{fontSize:11,color:C.textMuted,marginBottom:6,letterSpacing:1,textTransform:'uppercase'}}>Tu nombre real</div>
+                <Input value={realName} onChange={e=>setRealName(e.target.value)} onKeyDown={onKey} placeholder="Ej: Pedro García"/>
+                <div style={{fontSize:11,color:C.textDim,marginTop:4}}>El administrador lo usará para identificarte y aprobar tu cuenta</div>
+              </div>
+            )}
+            <div><div style={{fontSize:11,color:C.textMuted,marginBottom:6,letterSpacing:1,textTransform:'uppercase'}}>{tab==='register'?'Nombre en el ranking':'Nombre'}</div><Input value={name} onChange={e=>setName(e.target.value)} onKeyDown={onKey} placeholder={tab==='register'?'Apodo para la clasificación':'Tu nombre'}/></div>
             <div><div style={{fontSize:11,color:C.textMuted,marginBottom:6,letterSpacing:1,textTransform:'uppercase'}}>Contraseña</div><Input type="password" value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={onKey} placeholder="••••••"/></div>
             {tab==='register'&&<div><div style={{fontSize:11,color:C.textMuted,marginBottom:6,letterSpacing:1,textTransform:'uppercase'}}>Repite contraseña</div><Input type="password" value={pass2} onChange={e=>setPass2(e.target.value)} onKeyDown={onKey} placeholder="••••••"/></div>}
+            {tab==='register'&&(
+              <div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}33`,borderRadius:8,padding:'8px 12px',fontSize:12,color:C.textMuted}}>
+                ⏳ Tu cuenta quedará pendiente hasta que el administrador la apruebe
+              </div>
+            )}
             {err&&<div style={{background:`${C.accent}22`,border:`1px solid ${C.accent}55`,borderRadius:8,padding:'8px 12px',fontSize:13,color:C.accentHover,textAlign:'center'}}>⚠ {err}</div>}
-            <Btn onClick={tab==='login'?doLogin:doRegister} disabled={loading} full variant={tab==='login'?'primary':'success'}>{loading?'Cargando…':tab==='login'?'⚽ Entrar':'✓ Crear cuenta'}</Btn>
+            <Btn onClick={tab==='login'?doLogin:doRegister} disabled={loading} full variant={tab==='login'?'primary':'success'}>{loading?'Cargando…':tab==='login'?'⚽ Entrar':'✓ Solicitar acceso'}</Btn>
           </div>
         </Card>
-        <div style={{textAlign:'center',marginTop:20,fontSize:11,color:C.textDim}}>Los datos se comparten en tiempo real entre todos los participantes</div>
       </div>
     </div>
   )
 }
 
 function Leaderboard({users,betsMap,results,scoring,currentUserId,onViewUser}){
-  const scored=users.filter(u=>u.role!=='admin').map(u=>{const{total,breakdown}=calcScore(betsMap[u.id]||{},results,scoring);return{...u,total,breakdown}}).sort((a,b)=>b.total-a.total)
+  const scored=users.filter(u=>u.role!=='admin'&&u.status==='approved').map(u=>{const{total,breakdown}=calcScore(betsMap[u.id]||{},results,scoring);return{...u,total,breakdown}}).sort((a,b)=>b.total-a.total)
   const medals=['🥇','🥈','🥉']
   return(
     <div style={{display:'flex',flexDirection:'column',gap:10}}>
@@ -472,9 +471,7 @@ function Leaderboard({users,betsMap,results,scoring,currentUserId,onViewUser}){
       {scored.map((u,i)=>{
         const display=u.display_name||u.name
         return(
-          <div key={u.id} onClick={()=>onViewUser(u)}
-            style={{background:u.id===currentUserId?`${C.accent}18`:C.surface,border:`1px solid ${u.id===currentUserId?C.accent:C.border}`,borderRadius:14,padding:'14px 16px',boxShadow:i===0&&u.total>0?`0 0 24px ${C.gold}22`:'none',cursor:'pointer',transition:'border-color .15s'}}
-          >
+          <div key={u.id} onClick={()=>onViewUser(u)} style={{background:u.id===currentUserId?`${C.accent}18`:C.surface,border:`1px solid ${u.id===currentUserId?C.accent:C.border}`,borderRadius:14,padding:'14px 16px',boxShadow:i===0&&u.total>0?`0 0 24px ${C.gold}22`:'none',cursor:'pointer'}}>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
               <div style={{display:'flex',alignItems:'center',gap:12}}>
                 <div style={{fontSize:22,minWidth:30,textAlign:'center'}}>{medals[i]||<span style={{color:C.textDim,fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16}}>{i+1}</span>}</div>
@@ -485,10 +482,7 @@ function Leaderboard({users,betsMap,results,scoring,currentUserId,onViewUser}){
                 </div>
               </div>
               <div style={{display:'flex',alignItems:'center',gap:8}}>
-                <div style={{textAlign:'right'}}>
-                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:30,color:i===0&&u.total>0?C.gold:C.text,lineHeight:1}}>{u.total}</div>
-                  <div style={{fontSize:10,color:C.textMuted,letterSpacing:1}}>PTS</div>
-                </div>
+                <div style={{textAlign:'right'}}><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:30,color:i===0&&u.total>0?C.gold:C.text,lineHeight:1}}>{u.total}</div><div style={{fontSize:10,color:C.textMuted,letterSpacing:1}}>PTS</div></div>
                 <div style={{color:C.textDim,fontSize:16}}>›</div>
               </div>
             </div>
@@ -538,8 +532,8 @@ function KnockoutBets({phaseId,phaseBets,results,onChange,disabled,scoring}){
     const prev={r16:'r32',qf:'r16',sf:'qf'}[phaseId]
     return Object.values(results?.[prev]||{}).filter(Boolean)
   }
-  const teams=getTeams()
-  const matches=[];for(let i=0;i<teams.length;i+=2){if(teams[i+1])matches.push({id:`m${i}`,t1:teams[i],t2:teams[i+1]})}
+  const teams=getTeams(),matches=[]
+  for(let i=0;i<teams.length;i+=2){if(teams[i+1])matches.push({id:`m${i}`,t1:teams[i],t2:teams[i+1]})}
   const pts=S[phaseId]||0
   if(matches.length===0)return<Card><div style={{color:C.textMuted,textAlign:'center',padding:24,fontSize:14}}>Los enfrentamientos se actualizarán cuando termine la fase anterior</div></Card>
   return(
@@ -603,23 +597,25 @@ function FinalBets({finalBet,results,onChange,disabled,scoring}){
   )
 }
 
-function AdminPanel({results,scoring,onSave,onSaveScoring}){
+function AdminPanel({results,scoring,users,onSave,onSaveScoring,onApprove,onReject,onLoadAll}){
   const[local,setLocal]=useState(JSON.parse(JSON.stringify(results||{})))
   const[localScoring,setLocalScoring]=useState({...DEFAULT_SCORING,...scoring})
   const[activePhase,setActivePhase]=useState('groups')
-  const[activeSection,setActiveSection]=useState('sim')
+  const[activeSection,setActiveSection]=useState('users')
   const[saved,setSaved]=useState(false)
   const[simulating,setSimulating]=useState(null)
   const[confirmReset,setConfirmReset]=useState(null)
   useEffect(()=>setLocal(JSON.parse(JSON.stringify(results||{}))),[results])
   useEffect(()=>setLocalScoring({...DEFAULT_SCORING,...scoring}),[scoring])
 
+  const pending=users.filter(u=>u.status==='pending')
+  const approved=users.filter(u=>u.role!=='admin'&&u.status==='approved')
+
   const save=async(data)=>{await onSave(data||local);setSaved(true);setTimeout(()=>setSaved(false),2000)}
   const setGR=(g,pos,val)=>setLocal(r=>{const arr=[...(r?.groups?.[g]||['',''])];arr[pos]=val;return{...r,groups:{...(r.groups||{}),[g]:arr}}})
 
   async function simPhase(phaseId){
-    setSimulating(phaseId)
-    const updated=simulatePhase(phaseId,local)
+    setSimulating(phaseId);const updated=simulatePhase(phaseId,local)
     setLocal(updated);await onSave(updated)
     setSimulating(null);setSaved(true);setTimeout(()=>setSaved(false),2000)
   }
@@ -640,48 +636,87 @@ function AdminPanel({results,scoring,onSave,onSaveScoring}){
 
   return(
     <div style={{display:'flex',flexDirection:'column',gap:16}}>
-      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:22,color:C.accent}}>⚙ Panel de Administración</div>
-      <div style={{display:'flex',gap:4,background:C.surfaceHigh,borderRadius:10,padding:4}}>
-        {[['sim','🎲 Simulador'],['results','📋 Resultados'],['scoring','🏅 Puntuación']].map(([id,label])=>(
-          <button key={id} onClick={()=>setActiveSection(id)} style={{flex:1,padding:'8px 4px',border:'none',borderRadius:8,cursor:'pointer',background:activeSection===id?C.accent:'transparent',color:activeSection===id?'#fff':C.textMuted,fontWeight:800,fontSize:12,fontFamily:"'Barlow Condensed',sans-serif",letterSpacing:.5}}>{label}</button>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:22,color:C.accent}}>⚙ Administración</div>
+        {pending.length>0&&<div style={{background:`${C.gold}33`,border:`1px solid ${C.gold}`,borderRadius:20,padding:'4px 12px',fontSize:12,color:C.gold,fontWeight:700}}>⏳ {pending.length} pendiente{pending.length>1?'s':''}</div>}
+      </div>
+
+      <div style={{display:'flex',gap:4,background:C.surfaceHigh,borderRadius:10,padding:4,overflowX:'auto'}}>
+        {[['users',`👥 Usuarios${pending.length>0?` (${pending.length})`:''}`,],['sim','🎲 Simular'],['results','📋 Resultados'],['scoring','🏅 Puntos']].map(([id,label])=>(
+          <button key={id} onClick={()=>setActiveSection(id)} style={{flex:1,whiteSpace:'nowrap',padding:'8px 10px',border:'none',borderRadius:8,cursor:'pointer',background:activeSection===id?C.accent:'transparent',color:activeSection===id?'#fff':C.textMuted,fontWeight:800,fontSize:12,fontFamily:"'Barlow Condensed',sans-serif"}}>{label}</button>
         ))}
       </div>
 
+      {/* USUARIOS */}
+      {activeSection==='users'&&(
+        <div style={{display:'flex',flexDirection:'column',gap:12}}>
+          {pending.length>0&&(
+            <>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:C.gold}}>⏳ Pendientes de aprobación</div>
+              {pending.map(u=>(
+                <Card key={u.id} style={{borderColor:`${C.gold}44`,padding:'14px 16px'}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10}}>
+                    <div>
+                      <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:C.text}}>{u.display_name||u.name}</div>
+                      {u.display_name&&<div style={{fontSize:11,color:C.textDim}}>@{u.name}</div>}
+                    </div>
+                    <div style={{display:'flex',gap:8,flexShrink:0}}>
+                      <Btn onClick={()=>onApprove(u.id)} variant='success' small>✓ Aprobar</Btn>
+                      <Btn onClick={()=>onReject(u.id)} variant='danger' small>✗ Rechazar</Btn>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+              <div style={{height:1,background:C.border,margin:'4px 0'}}/>
+            </>
+          )}
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:C.textMuted}}>✅ Participantes aprobados ({approved.length})</div>
+          {approved.length===0&&<Card><div style={{color:C.textMuted,textAlign:'center',padding:12,fontSize:13}}>Ningún participante aprobado todavía</div></Card>}
+          {approved.map(u=>(
+            <div key={u.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:'12px 14px'}}>
+              <div>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:15,color:C.text}}>{u.display_name||u.name}</div>
+                {u.display_name&&<div style={{fontSize:11,color:C.textDim}}>@{u.name}</div>}
+              </div>
+              <Tag color={C.greenSoft}>Aprobado</Tag>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* SIMULADOR */}
       {activeSection==='sim'&&(
         <Card style={{borderColor:`${C.blue}44`}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:'#5bb3f5',marginBottom:8}}>🎲 Simulador por fases</div>
-          <div style={{fontSize:12,color:C.textMuted,marginBottom:12}}>Simula o resetea cada fase de forma independiente.</div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:'#5bb3f5',marginBottom:12}}>🎲 Simulador por fases</div>
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
             {PHASES.map(p=>{
-              const req=phaseRequires[p.id]
-              const blocked=req&&!local[req]
+              const req=phaseRequires[p.id],blocked=req&&!local[req]
               const hasData=!!(local[p.id]&&(p.id==='groups'?Object.keys(local.groups||{}).length>0:Object.keys(local[p.id]||{}).length>0))
               return(
                 <div key={p.id} style={{display:'flex',alignItems:'center',gap:8,background:C.surfaceHigh,borderRadius:10,padding:'10px 12px'}}>
                   <div style={{flex:1,fontSize:13,color:blocked?C.textDim:C.text}}>{p.icon} {p.label}</div>
                   <div style={{display:'flex',gap:6}}>
-                    {hasData&&(
-                      confirmReset===p.id?(
-                        <div style={{display:'flex',gap:4}}>
-                          <Btn onClick={()=>doReset(p.id)} variant='danger' small>¿Seguro?</Btn>
-                          <Btn onClick={()=>setConfirmReset(null)} variant='ghost' small>No</Btn>
-                        </div>
-                      ):(
-                        <Btn onClick={()=>setConfirmReset(p.id)} variant='ghost' small style={{color:C.accent,borderColor:C.accent}}>🗑 Reset</Btn>
-                      )
-                    )}
-                    <Btn onClick={()=>!blocked&&simPhase(p.id)} disabled={!!blocked||simulating===p.id} variant='blue' small style={{minWidth:80}}>{simulating===p.id?'…':'🎲 Sim'}</Btn>
+                    {hasData&&(confirmReset===p.id?(
+                      <div style={{display:'flex',gap:4}}>
+                        <Btn onClick={()=>doReset(p.id)} variant='danger' small>¿Seguro?</Btn>
+                        <Btn onClick={()=>setConfirmReset(null)} variant='ghost' small>No</Btn>
+                      </div>
+                    ):(
+                      <Btn onClick={()=>setConfirmReset(p.id)} variant='ghost' small style={{color:C.accent,borderColor:C.accent}}>🗑</Btn>
+                    ))}
+                    <Btn onClick={()=>!blocked&&simPhase(p.id)} disabled={!!blocked||simulating===p.id} variant='blue' small style={{minWidth:75}}>{simulating===p.id?'…':'🎲 Sim'}</Btn>
                   </div>
                 </div>
               )
             })}
             <div style={{borderTop:`1px solid ${C.border}`,paddingTop:10,marginTop:4}}>
-              <Btn onClick={simAll} disabled={!!simulating} variant='gold' full>{simulating==='all'?'Simulando todo…':'🎲 Simular competición completa'}</Btn>
+              <Btn onClick={simAll} disabled={!!simulating} variant='gold' full>{simulating==='all'?'Simulando…':'🎲 Simular todo'}</Btn>
             </div>
           </div>
         </Card>
       )}
 
+      {/* RESULTADOS */}
       {activeSection==='results'&&(
         <>
           <div style={{background:`${C.accent}18`,border:`1px solid ${C.accent}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.silver}}>Introduce los resultados reales para calcular los puntos automáticamente.</div>
@@ -714,6 +749,7 @@ function AdminPanel({results,scoring,onSave,onSaveScoring}){
         </>
       )}
 
+      {/* PUNTUACIÓN */}
       {activeSection==='scoring'&&(
         <>
           <div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.textMuted}}>Modifica los puntos de cada fase. Los cambios afectan a todos en tiempo real.</div>
@@ -754,7 +790,7 @@ export default function App(){
 
   const loadAll=useCallback(async()=>{
     const[{data:ud},{data:bd},{data:rd},{data:cd}]=await Promise.all([
-      supabase.from('porra_users').select('id,name,role,display_name'),
+      supabase.from('porra_users').select('id,name,role,display_name,status'),
       supabase.from('porra_bets').select('user_id,phase,data'),
       supabase.from('porra_results').select('phase,data'),
       supabase.from('porra_config').select('key,value'),
@@ -767,6 +803,19 @@ export default function App(){
   },[])
 
   useEffect(()=>{loadAll()},[loadAll])
+
+  // Refresh session from DB to catch status changes
+  useEffect(()=>{
+    if(!session)return
+    const interval=setInterval(async()=>{
+      const{data}=await supabase.from('porra_users').select('*').eq('id',session.id).single()
+      if(data&&data.status!==session.status){
+        localStorage.setItem('porra_user',JSON.stringify(data))
+        setSession(data)
+      }
+    },10000)
+    return()=>clearInterval(interval)
+  },[session])
 
   useEffect(()=>{
     const ch=supabase.channel('porra-rt')
@@ -787,7 +836,6 @@ export default function App(){
     if(error){notify('❌ Error al guardar');return}
     notify('✓ Apuesta guardada')
   }
-
   async function handleSaveResults(newResults){
     setResults(newResults)
     for(const[phase,data]of Object.entries(newResults)){
@@ -795,20 +843,25 @@ export default function App(){
     }
     notify('✓ Resultados guardados')
   }
-
   async function handleSaveScoring(newScoring){
     setScoring(newScoring)
     await supabase.from('porra_config').upsert({key:'scoring',value:newScoring,updated_at:new Date().toISOString()},{onConflict:'key'})
     notify('✓ Puntuación actualizada')
   }
-
-  function handleShare(){
-    const url=window.location.href
-    const text='¡Únete a la Porra Mundial 2026 de La Viuda! Haz tus predicciones aquí:'
-    if(navigator.share){navigator.share({title:'Porra Mundial 2026',text,url}).catch(()=>{})}
-    else{navigator.clipboard.writeText(url).then(()=>notify('✓ URL copiada al portapapeles')).catch(()=>notify('URL: '+url))}
+  async function handleApprove(userId){
+    await supabase.from('porra_users').update({status:'approved'}).eq('id',userId)
+    await loadAll();notify('✓ Usuario aprobado')
   }
-
+  async function handleReject(userId){
+    await supabase.from('porra_bets').delete().eq('user_id',userId)
+    await supabase.from('porra_users').delete().eq('id',userId)
+    await loadAll();notify('✓ Usuario rechazado')
+  }
+  function handleShare(){
+    const url=window.location.href,text='¡Únete a la Porra Mundial 2026 de La Viuda! Haz tus predicciones aquí:'
+    if(navigator.share){navigator.share({title:'Porra Mundial 2026',text,url}).catch(()=>{})}
+    else{navigator.clipboard.writeText(url).then(()=>notify('✓ URL copiada')).catch(()=>notify('URL: '+url))}
+  }
   function handleLogout(){localStorage.removeItem('porra_user');setSession(null)}
 
   if(!loaded)return(
@@ -819,6 +872,9 @@ export default function App(){
   )
 
   if(!session)return<LoginScreen onLogin={setSession}/>
+
+  // Pending users see waiting screen (except admin)
+  if(session.status==='pending'&&session.role!=='admin')return<PendingScreen user={session} onLogout={handleLogout}/>
 
   if(showProfile)return(
     <div style={{minHeight:'100vh',background:C.bg,paddingBottom:72}}>
@@ -846,13 +902,14 @@ export default function App(){
   const phase=PHASES.find(p=>p.id===activePhase)
   const closed=isClosed(phase?.deadline||'')
   const unlocked=isPhaseUnlocked(activePhase,results)
+  const pendingCount=users.filter(u=>u.status==='pending').length
 
   const TABS=[
     {id:'ranking',label:'Ranking',icon:'🏆'},
     {id:'bets',label:'Apuestas',icon:'⚽'},
     {id:'scoring',label:'Puntos',icon:'🏅'},
     {id:'rules',label:'Reglas',icon:'📋'},
-    ...(session.role==='admin'?[{id:'admin',label:'Admin',icon:'⚙'}]:[]),
+    ...(session.role==='admin'?[{id:'admin',label:`Admin${pendingCount>0?` (${pendingCount})`:''}`,icon:'⚙'}]:[]),
   ]
 
   return(
@@ -876,32 +933,26 @@ export default function App(){
         {activeTab==='bets'&&(
           <>
             <div style={{display:'flex',overflowX:'auto',gap:6,marginBottom:16,paddingBottom:4,scrollbarWidth:'none'}}>
-              {PHASES.map(p=>{
-                const done=isClosed(p.deadline)
-                const open=isPhaseUnlocked(p.id,results)
-                return<button key={p.id} onClick={()=>setActivePhase(p.id)} style={{whiteSpace:'nowrap',padding:'6px 14px',borderRadius:20,flexShrink:0,border:`1px solid ${activePhase===p.id?C.accent:C.border}`,background:activePhase===p.id?C.accent:'transparent',color:activePhase===p.id?'#fff':!open?C.textDim:done?C.textMuted:C.text,cursor:'pointer',fontSize:12,fontWeight:700,fontFamily:'inherit'}}>{p.icon} {p.short}{!open&&' 🔒'}</button>
-              })}
+              {PHASES.map(p=>{const done=isClosed(p.deadline),open=isPhaseUnlocked(p.id,results);return<button key={p.id} onClick={()=>setActivePhase(p.id)} style={{whiteSpace:'nowrap',padding:'6px 14px',borderRadius:20,flexShrink:0,border:`1px solid ${activePhase===p.id?C.accent:C.border}`,background:activePhase===p.id?C.accent:'transparent',color:activePhase===p.id?'#fff':!open?C.textDim:done?C.textMuted:C.text,cursor:'pointer',fontSize:12,fontWeight:700,fontFamily:'inherit'}}>{p.icon} {p.short}{!open&&' 🔒'}</button>})}
             </div>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:22,color:C.text}}>{phase?.label}</div>
               <Tag color={closed?C.accent:C.greenSoft}>{timeLeft(phase?.deadline||'')}</Tag>
             </div>
-            {!unlocked&&(
-              <Card><div style={{color:C.textMuted,textAlign:'center',padding:24,fontSize:14}}>🔒 Esta fase se desbloqueará cuando el administrador introduzca todos los resultados de la fase anterior</div></Card>
-            )}
+            {!unlocked&&<Card><div style={{color:C.textMuted,textAlign:'center',padding:24,fontSize:14}}>🔒 Esta fase se desbloqueará cuando el administrador introduzca todos los resultados de la fase anterior</div></Card>}
             {unlocked&&activePhase==='groups'&&<GroupBets groupBets={userBets.groups||{}} onChange={(g,bet)=>handleSaveBet('groups',{...(userBets.groups||{}),[g]:bet})} disabled={closed} scoring={scoring}/>}
             {unlocked&&['r32','r16','qf','sf'].includes(activePhase)&&<KnockoutBets phaseId={activePhase} phaseBets={userBets[activePhase]||{}} results={results} onChange={(mid,team)=>handleSaveBet(activePhase,{...(userBets[activePhase]||{}),[mid]:team})} disabled={closed} scoring={scoring}/>}
             {unlocked&&activePhase==='third'&&<ThirdPlaceBet thirdBet={userBets.third||{}} results={results} onChange={bet=>handleSaveBet('third',bet)} disabled={closed} scoring={scoring}/>}
             {unlocked&&activePhase==='final'&&<FinalBets finalBet={userBets.final||{}} results={results} onChange={bet=>handleSaveBet('final',bet)} disabled={closed} scoring={scoring}/>}
           </>
         )}
-        {activeTab==='admin'&&session.role==='admin'&&<AdminPanel results={results} scoring={scoring} onSave={handleSaveResults} onSaveScoring={handleSaveScoring}/>}
+        {activeTab==='admin'&&session.role==='admin'&&<AdminPanel results={results} scoring={scoring} users={users} onSave={handleSaveResults} onSaveScoring={handleSaveScoring} onApprove={handleApprove} onReject={handleReject} onLoadAll={loadAll}/>}
       </main>
       <nav style={{position:'fixed',bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:'flex',justifyContent:'center',zIndex:100}}>
         {TABS.map(t=>(
-          <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{flex:1,maxWidth:130,padding:'9px 0 11px',border:'none',background:activeTab===t.id?`${C.accent}1a`:'transparent',color:activeTab===t.id?C.accentHover:C.textMuted,cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:3,borderTop:`2px solid ${activeTab===t.id?C.accent:'transparent'}`,transition:'all .15s'}}>
+          <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{flex:1,maxWidth:120,padding:'9px 0 11px',border:'none',background:activeTab===t.id?`${C.accent}1a`:'transparent',color:activeTab===t.id?C.accentHover:C.textMuted,cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:3,borderTop:`2px solid ${activeTab===t.id?C.accent:'transparent'}`,transition:'all .15s'}}>
             <span style={{fontSize:18}}>{t.icon}</span>
-            <span style={{fontSize:10,fontWeight:800,letterSpacing:1,fontFamily:"'Barlow Condensed',sans-serif"}}>{t.label}</span>
+            <span style={{fontSize:10,fontWeight:800,letterSpacing:.5,fontFamily:"'Barlow Condensed',sans-serif"}}>{t.label}</span>
           </button>
         ))}
       </nav>
