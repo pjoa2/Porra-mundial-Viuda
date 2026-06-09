@@ -41,6 +41,9 @@ const GROUPS = {
   L:['Inglaterra','Croacia','Ghana','Panamá'],
 }
 
+// Number of matches per knockout phase
+const PHASE_MATCH_COUNT = {r32:16,r16:8,qf:4,sf:2,third:1,final:1}
+
 const PHASES = [
   {id:'groups',label:'Fase de Grupos',short:'Grupos',icon:'⚽',deadline:'2026-06-11T17:00:00'},
   {id:'r32',label:'Dieciseisavos de Final',short:'1/16F',icon:'🔵',deadline:'2026-07-01T17:00:00'},
@@ -66,45 +69,116 @@ function hashPassword(str){
   return(hash>>>0).toString(16)
 }
 function shuffle(arr){
-  const a=[...arr]
-  for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}
-  return a
+  const a=[...arr];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]};return a
 }
-function getSFLosers(results){
-  const sfWinners=Object.values(results?.sf||{}).filter(Boolean)
-  const qfWinners=Object.values(results?.qf||{}).filter(Boolean)
-  return qfWinners.filter(t=>!sfWinners.includes(t)).slice(0,2)
+function getSFLosers(results,matches){
+  const sfMatches=matches?.sf||[]
+  const sfWinners=sfMatches.map(m=>results?.sf?.[m.id]).filter(Boolean)
+  return sfMatches.map(m=>sfWinners.includes(m.t1)?m.t2:sfWinners.includes(m.t2)?m.t1:null).filter(Boolean).slice(0,2)
 }
-function isPhaseVisible(phaseId,results){
+
+// Phase is complete when ALL matches have a winner
+function isPhaseComplete(phaseId,results,matches){
+  if(phaseId==='groups'){
+    const r=results?.groups||{}
+    return Object.keys(GROUPS).every(g=>r[g]&&r[g][0]&&r[g][1])
+  }
+  const phaseMatches=matches?.[phaseId]||[]
+  const phaseResults=results?.[phaseId]||{}
+  if(phaseMatches.length===0)return false
+  return phaseMatches.every(m=>phaseResults[m.id])
+}
+
+// Phase is visible (bets can be seen) if deadline passed OR phase is complete
+function isPhaseVisible(phaseId,results,matches){
   if(isClosed(PHASES.find(p=>p.id===phaseId)?.deadline||''))return true
-  const r=results?.[phaseId];if(!r)return false
-  if(phaseId==='groups')return Object.keys(GROUPS).every(g=>r[g]&&r[g][0]&&r[g][1])
-  if(phaseId==='third')return!!r.winner
-  if(phaseId==='final')return!!(r.winner&&r.runnerUp)
-  return Object.keys(r).length>0&&Object.values(r).every(Boolean)
+  return isPhaseComplete(phaseId,results,matches)
 }
-function isPhaseUnlocked(phaseId,results){
+
+// Phase is unlocked for betting if previous phase is complete AND matches are set
+function isPhaseUnlocked(phaseId,results,matches){
+  if(phaseId==='groups')return true
   const prev={r32:'groups',r16:'r32',qf:'r16',sf:'qf',third:'sf',final:'sf'}[phaseId]
-  if(!prev)return true
-  return isPhaseVisible(prev,results)
+  if(!isPhaseComplete(prev,results,matches))return false
+  // For knockout phases, matches must be set by admin
+  if(phaseId==='third'){
+    const sfLosers=getSFLosers(results,matches)
+    return sfLosers.length>=2
+  }
+  if(phaseId==='final'){
+    const sfMatches=matches?.sf||[]
+    const sfResults=results?.sf||{}
+    return sfMatches.length>0&&sfMatches.every(m=>sfResults[m.id])
+  }
+  const phaseMatches=matches?.[phaseId]||[]
+  return phaseMatches.length>0
 }
-function simulatePhase(phaseId,currentResults){
+
+function shuffle2teams(teams){return shuffle(teams)}
+
+function generateSimMatches(phaseId,results,matches){
+  // Generate matches for simulation from previous results
+  const newMatches={...matches}
+  if(phaseId==='r32'){
+    const teams=[]
+    Object.keys(GROUPS).forEach(g=>{
+      teams.push(results?.groups?.[g]?.[0]||`1º Grupo ${g}`)
+      teams.push(results?.groups?.[g]?.[1]||`2º Grupo ${g}`)
+    })
+    // Add 8 best third place (simulated)
+    const thirds=Object.keys(GROUPS).slice(0,8).map(g=>results?.groups?.[g]?.[2]||`3º Grupo ${g}`)
+    const allTeams=shuffle([...teams,...thirds.slice(0,8)])
+    // Create 16 matches
+    const ms=[]
+    for(let i=0;i<Math.min(allTeams.length,32);i+=2){
+      if(allTeams[i+1])ms.push({id:`m${i}`,t1:allTeams[i],t2:allTeams[i+1]})
+    }
+    newMatches.r32=ms
+    return newMatches
+  }
+  const prevMap={r16:'r32',qf:'r16',sf:'qf'}
+  const prev=prevMap[phaseId]
+  if(prev){
+    const prevMatches=newMatches[prev]||[]
+    const prevResults=results?.[prev]||{}
+    const winners=prevMatches.map(m=>prevResults[m.id]).filter(Boolean)
+    const ms=[]
+    for(let i=0;i<winners.length;i+=2){
+      if(winners[i+1])ms.push({id:`m${i}`,t1:winners[i],t2:winners[i+1]})
+    }
+    newMatches[phaseId]=ms
+    return newMatches
+  }
+  if(phaseId==='third'){
+    const losers=getSFLosers(results,newMatches)
+    if(losers.length>=2)newMatches.third=[{id:'m0',t1:losers[0],t2:losers[1]}]
+    return newMatches
+  }
+  if(phaseId==='final'){
+    const sfMatches=newMatches.sf||[]
+    const sfResults=results?.sf||{}
+    const winners=sfMatches.map(m=>sfResults[m.id]).filter(Boolean)
+    if(winners.length>=2)newMatches.final=[{id:'m0',t1:winners[0],t2:winners[1]}]
+    return newMatches
+  }
+  return newMatches
+}
+
+function simulatePhaseResults(phaseId,currentResults,matches){
   const r=JSON.parse(JSON.stringify(currentResults||{}))
-  if(phaseId==='groups'){r.groups={};Object.entries(GROUPS).forEach(([g,teams])=>{const s=shuffle(teams);r.groups[g]=[s[0],s[1]]});return r}
-  if(phaseId==='r32'){if(!r.groups)return r;const teams=[];Object.keys(GROUPS).forEach(g=>{teams.push(r.groups[g]?.[0]||`1º Grupo ${g}`);teams.push(r.groups[g]?.[1]||`2º Grupo ${g}`)});for(let i=0;i<8;i++)teams.push(shuffle(Object.values(GROUPS).map(t=>t[2]))[i]);r.r32={};for(let i=0;i<teams.length;i+=2){if(teams[i+1])r.r32[`m${i}`]=shuffle([teams[i],teams[i+1]])[0]};return r}
-  if(phaseId==='r16'){if(!r.r32)return r;const teams=Object.values(r.r32).filter(Boolean);r.r16={};for(let i=0;i<teams.length;i+=2){if(teams[i+1])r.r16[`m${i}`]=shuffle([teams[i],teams[i+1]])[0]};return r}
-  if(phaseId==='qf'){if(!r.r16)return r;const teams=Object.values(r.r16).filter(Boolean);r.qf={};for(let i=0;i<teams.length;i+=2){if(teams[i+1])r.qf[`m${i}`]=shuffle([teams[i],teams[i+1]])[0]};return r}
-  if(phaseId==='sf'){if(!r.qf)return r;const teams=Object.values(r.qf).filter(Boolean);r.sf={};for(let i=0;i<teams.length;i+=2){if(teams[i+1])r.sf[`m${i}`]=shuffle([teams[i],teams[i+1]])[0]};return r}
-  if(phaseId==='third'){if(!r.sf||!r.qf)return r;const losers=Object.values(r.qf).filter(t=>!Object.values(r.sf).includes(t)).slice(0,2);r.third={winner:shuffle(losers)[0]||''};return r}
-  if(phaseId==='final'){if(!r.sf)return r;const finalists=shuffle(Object.values(r.sf).filter(Boolean));r.final={winner:finalists[0]||'',runnerUp:finalists[1]||''};return r}
+  if(phaseId==='groups'){
+    r.groups={}
+    Object.entries(GROUPS).forEach(([g,teams])=>{const s=shuffle(teams);r.groups[g]=[s[0],s[1]]})
+    return r
+  }
+  const phaseMatches=matches?.[phaseId]||[]
+  if(phaseMatches.length===0)return r
+  r[phaseId]={}
+  phaseMatches.forEach(m=>{r[phaseId][m.id]=shuffle([m.t1,m.t2])[0]})
   return r
 }
-function resetPhase(phaseId,currentResults){
-  const r=JSON.parse(JSON.stringify(currentResults||{}))
-  delete r[phaseId];if(phaseId==='groups')r.groups={}
-  return r
-}
-function calcScore(userBets,results,scoring){
+
+function calcScore(userBets,results,matches,scoring){
   const S={...DEFAULT_SCORING,...scoring};let total=0;const breakdown=[]
   if(userBets?.groups&&results?.groups){
     let pts=0
@@ -119,15 +193,25 @@ function calcScore(userBets,results,scoring){
   }
   ;[['r32',S.r32],['r16',S.r16],['qf',S.qf],['sf',S.sf]].forEach(([pid,ppts])=>{
     if(!userBets?.[pid]||!results?.[pid])return
-    let pts=0;Object.keys(results[pid]).forEach(mid=>{if(results[pid][mid]&&userBets[pid][mid]===results[pid][mid])pts+=ppts})
+    let pts=0
+    const phaseMatches=matches?.[pid]||[]
+    phaseMatches.forEach(m=>{if(results[pid][m.id]&&userBets[pid][m.id]===results[pid][m.id])pts+=ppts})
     if(pts>0){total+=pts;breakdown.push({label:PHASES.find(p=>p.id===pid)?.short,pts})}
   })
-  if(userBets?.third&&results?.third){let pts=0;if(results.third.winner&&userBets.third.winner===results.third.winner)pts+=S.third;if(pts>0){total+=pts;breakdown.push({label:'3º/4º',pts})}}
+  if(userBets?.third&&results?.third){
+    const thirdMatch=(matches?.third||[])[0]
+    if(thirdMatch){const bet=userBets.third[thirdMatch.id],real=results.third[thirdMatch.id];if(bet&&real&&bet===real){total+=S.third;breakdown.push({label:'3º/4º',pts:S.third})}}
+  }
   if(userBets?.final&&results?.final){
-    let pts=0
-    if(results.final.winner&&userBets.final.winner===results.final.winner)pts+=S.final_winner
-    if(results.final.runnerUp&&userBets.final.runnerUp===results.final.runnerUp)pts+=S.final_runner
-    if(pts>0){total+=pts;breakdown.push({label:'Final',pts})}
+    const finalMatch=(matches?.final||[])[0]
+    if(finalMatch){
+      let pts=0
+      const betWinner=userBets.final[finalMatch.id+'_winner'],realWinner=results.final[finalMatch.id+'_winner']
+      const betRunner=userBets.final[finalMatch.id+'_runner'],realRunner=results.final[finalMatch.id+'_runner']
+      if(betWinner&&realWinner&&betWinner===realWinner)pts+=S.final_winner
+      if(betRunner&&realRunner&&betRunner===realRunner)pts+=S.final_runner
+      if(pts>0){total+=pts;breakdown.push({label:'Final',pts})}
+    }
   }
   return{total,breakdown}
 }
@@ -170,7 +254,7 @@ function PendingScreen({user,onLogout}){
           <div style={{fontSize:40,marginBottom:16}}>⏳</div>
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:22,color:C.text,marginBottom:10}}>Cuenta pendiente</div>
           <div style={{fontSize:14,color:C.textMuted,lineHeight:1.6,marginBottom:20}}>
-            Hola <b style={{color:C.text}}>{user.display_name||user.name}</b>, tu cuenta está pendiente de aprobación por el administrador. En cuanto te apruebe podrás acceder a la porra.
+            Hola <b style={{color:C.text}}>{user.display_name||user.name}</b>, tu cuenta está pendiente de aprobación. En cuanto el administrador te apruebe podrás acceder.
           </div>
           <Btn onClick={onLogout} variant='ghost' full>Cerrar sesión</Btn>
         </Card>
@@ -179,9 +263,117 @@ function PendingScreen({user,onLogout}){
   )
 }
 
-function UserBetsViewer({user,bets,results,scoring,onBack}){
+// ── KNOCKOUT BETS ─────────────────────────────────────────────────────────────
+function KnockoutBets({phaseId,phaseBets,results,matches,onChange,disabled,scoring}){
+  const S={...DEFAULT_SCORING,...scoring}
+  const[local,setLocal]=useState(phaseBets||{})
+  useEffect(()=>setLocal(phaseBets||{}),[phaseBets])
+  const phaseMatches=matches?.[phaseId]||[]
+  const pts=S[phaseId]||0
+  function handleChange(matchId,team){setLocal(prev=>({...prev,[matchId]:team}));onChange(matchId,team)}
+  if(phaseMatches.length===0)return<Card><div style={{color:C.textMuted,textAlign:'center',padding:24,fontSize:14}}>⏳ El administrador aún no ha publicado los cruces de esta fase</div></Card>
+  return(
+    <div style={{display:'flex',flexDirection:'column',gap:12}}>
+      <div style={{background:`${C.blue}18`,border:`1px solid ${C.blue}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.silver}}>✅ Acierto por partido: <b style={{color:'#5bb3f5'}}>+{pts} pts</b></div>
+      {phaseMatches.map((m,idx)=>{
+        const bet=local[m.id]
+        return(
+          <Card key={m.id} style={{padding:'13px 15px'}}>
+            <div style={{fontSize:11,color:C.textMuted,marginBottom:9,letterSpacing:1}}>PARTIDO {idx+1}</div>
+            <div style={{display:'flex',gap:8}}>
+              {[m.t1,m.t2].map(team=><button key={team} disabled={disabled} onClick={()=>!disabled&&handleChange(m.id,team)} style={{flex:1,padding:'10px 6px',borderRadius:10,cursor:disabled?'not-allowed':'pointer',border:`2px solid ${bet===team?C.green:C.border}`,background:bet===team?`${C.green}22`:C.surfaceHigh,color:bet===team?C.greenSoft:C.text,fontWeight:700,fontSize:13,fontFamily:'inherit',transition:'all .15s',textAlign:'center',wordBreak:'break-word'}}>{bet===team&&'✓ '}{team}</button>)}
+            </div>
+          </Card>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── THIRD PLACE BET ───────────────────────────────────────────────────────────
+function ThirdPlaceBet({thirdBet,results,matches,onChange,disabled,scoring}){
+  const S={...DEFAULT_SCORING,...scoring}
+  const[local,setLocal]=useState(thirdBet||{})
+  useEffect(()=>setLocal(thirdBet||{}),[thirdBet])
+  const thirdMatch=(matches?.third||[])[0]
+  function handleChange(matchId,team){setLocal(prev=>({...prev,[matchId]:team}));onChange(matchId,team)}
+  return(
+    <div style={{display:'flex',flexDirection:'column',gap:14}}>
+      <div style={{background:`${C.silver}18`,border:`1px solid ${C.silver}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.silver}}>🥉 <b style={{color:C.silver}}>Acertar ganador: +{S.third} pts</b></div>
+      {!thirdMatch?<Card><div style={{color:C.textMuted,textAlign:'center',padding:24,fontSize:14}}>⏳ El administrador aún no ha publicado este partido</div></Card>:(
+        <Card style={{padding:'13px 15px'}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:C.text,marginBottom:10}}>🥉 ¿Quién gana el 3er puesto?</div>
+          <div style={{display:'flex',gap:8}}>
+            {[thirdMatch.t1,thirdMatch.t2].map(team=><button key={team} disabled={disabled} onClick={()=>!disabled&&handleChange(thirdMatch.id,team)} style={{flex:1,padding:'12px 8px',borderRadius:10,cursor:disabled?'not-allowed':'pointer',border:`2px solid ${local[thirdMatch.id]===team?C.silver:C.border}`,background:local[thirdMatch.id]===team?`${C.silver}22`:C.surfaceHigh,color:local[thirdMatch.id]===team?C.silver:C.text,fontWeight:700,fontSize:14,fontFamily:'inherit',transition:'all .15s',textAlign:'center',wordBreak:'break-word'}}>{local[thirdMatch.id]===team&&'✓ '}{team}</button>)}
+          </div>
+        </Card>
+      )}
+    </div>
+  )
+}
+
+// ── FINAL BETS ────────────────────────────────────────────────────────────────
+function FinalBets({finalBet,results,matches,onChange,disabled,scoring}){
+  const S={...DEFAULT_SCORING,...scoring}
+  const[local,setLocal]=useState(finalBet||{})
+  useEffect(()=>setLocal(finalBet||{}),[finalBet])
+  const finalMatch=(matches?.final||[])[0]
+  function handleChange(key,team){setLocal(prev=>({...prev,[key]:team}));onChange(key,team)}
+  return(
+    <div style={{display:'flex',flexDirection:'column',gap:14}}>
+      <div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.silver}}>🏆 <b style={{color:C.gold}}>Campeón +{S.final_winner}pts</b> · 🥈 <b style={{color:C.silver}}>Subcampeón +{S.final_runner}pts</b></div>
+      {!finalMatch?<Card><div style={{color:C.textMuted,textAlign:'center',padding:24,fontSize:14}}>⏳ El administrador aún no ha publicado la final</div></Card>:(
+        <>
+          {[{key:finalMatch.id+'_winner',label:'🏆 Campeón',pts:S.final_winner,color:C.gold},{key:finalMatch.id+'_runner',label:'🥈 Subcampeón',pts:S.final_runner,color:C.silver}].map(({key,label})=>(
+            <Card key={key} style={{padding:'13px 15px'}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:C.text,marginBottom:10}}>{label}</div>
+              <div style={{display:'flex',gap:8}}>
+                {[finalMatch.t1,finalMatch.t2].map(team=><button key={team} disabled={disabled} onClick={()=>!disabled&&handleChange(key,team)} style={{flex:1,padding:'10px 6px',borderRadius:10,cursor:disabled?'not-allowed':'pointer',border:`2px solid ${local[key]===team?C.gold:C.border}`,background:local[key]===team?`${C.gold}22`:C.surfaceHigh,color:local[key]===team?C.gold:C.text,fontWeight:700,fontSize:13,fontFamily:'inherit',transition:'all .15s',textAlign:'center',wordBreak:'break-word'}}>{local[key]===team&&'✓ '}{team}</button>)}
+              </div>
+            </Card>
+          ))}
+        </>
+      )}
+    </div>
+  )
+}
+
+// ── GROUP BETS ────────────────────────────────────────────────────────────────
+function GroupBets({groupBets,onChange,disabled,scoring}){
+  const S={...DEFAULT_SCORING,...scoring}
+  const[local,setLocal]=useState(groupBets||{})
+  useEffect(()=>setLocal(groupBets||{}),[groupBets])
+  function handleChange(g,nb){setLocal(prev=>({...prev,[g]:nb}));onChange(g,nb)}
+  return(
+    <div style={{display:'flex',flexDirection:'column',gap:14}}>
+      <div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.silver}}>🥇 <b style={{color:C.gold}}>1º exacto +{S.groups_first}pts</b> · 🥈 <b style={{color:C.silver}}>2º exacto +{S.groups_second}pts</b> · ✅ Clasificado <b>+{S.groups_qualified}pt</b></div>
+      {Object.entries(GROUPS).map(([g,teams])=>{
+        const bet=local[g]||['','']
+        return(
+          <Card key={g} style={{padding:'13px 15px'}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:15,color:C.accent,marginBottom:10,letterSpacing:1.5}}>GRUPO {g}</div>
+            {[0,1].map(pos=>(
+              <div key={pos} style={{display:'flex',alignItems:'center',gap:8,marginBottom:pos===0?8:0}}>
+                <span style={{fontSize:16,minWidth:22}}>{pos===0?'🥇':'🥈'}</span>
+                <select disabled={disabled} value={bet[pos]||''} onChange={e=>{const nb=[...bet];nb[pos]=e.target.value;if(pos===0&&nb[1]===e.target.value)nb[1]='';if(pos===1&&nb[0]===e.target.value)nb[0]='';handleChange(g,nb)}} style={{flex:1,background:C.surfaceHigh,border:`1px solid ${C.border}`,borderRadius:8,padding:'8px 10px',color:bet[pos]?C.text:C.textMuted,fontSize:14,fontFamily:'inherit',cursor:disabled?'not-allowed':'pointer'}}>
+                  <option value=''>— {pos===0?'1º':'2º'} clasificado —</option>
+                  {teams.map(t=><option key={t} value={t} disabled={pos===1?bet[0]===t:bet[1]===t}>{t}</option>)}
+                </select>
+              </div>
+            ))}
+          </Card>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── USER BETS VIEWER ──────────────────────────────────────────────────────────
+function UserBetsViewer({user,bets,results,matches,scoring,onBack}){
   const[activePhase,setActivePhase]=useState('groups')
   const S={...DEFAULT_SCORING,...scoring}
+  const visiblePhases=PHASES.filter(p=>isPhaseVisible(p.id,results,matches))
+
   function GroupsView(){
     const gb=bets?.groups||{}
     return(
@@ -209,21 +401,18 @@ function UserBetsViewer({user,bets,results,scoring,onBack}){
       </div>
     )
   }
+
   function KnockoutView({phaseId}){
     const pb=bets?.[phaseId]||{},ppts=S[phaseId]||0
-    const prev={r32:'groups',r16:'r32',qf:'r16',sf:'qf'}[phaseId]
-    let teams=[]
-    if(phaseId==='r32'){Object.keys(GROUPS).forEach(g=>{const r=results?.groups?.[g]||[];teams.push(r[0]||`1º Grupo ${g}`);teams.push(r[1]||`2º Grupo ${g}`)});for(let i=0;i<8;i++)teams.push(`Mejor 3º #${i+1}`)}
-    else teams=Object.values(results?.[prev]||{}).filter(Boolean)
-    const matches=[];for(let i=0;i<teams.length;i+=2){if(teams[i+1])matches.push({id:`m${i}`,t1:teams[i],t2:teams[i+1]})}
-    if(matches.length===0)return<Card><div style={{color:C.textMuted,textAlign:'center',padding:20,fontSize:13}}>Enfrentamientos no disponibles aún</div></Card>
+    const phaseMatches=matches?.[phaseId]||[]
+    if(phaseMatches.length===0)return<Card><div style={{color:C.textMuted,textAlign:'center',padding:20,fontSize:13}}>Sin cruces disponibles</div></Card>
     return(
       <div style={{display:'flex',flexDirection:'column',gap:10}}>
-        {matches.map((m,idx)=>{
+        {phaseMatches.map((m,idx)=>{
           const bet=pb[m.id],real=results?.[phaseId]?.[m.id],correct=bet&&real&&bet===real
           return(
             <Card key={m.id} style={{padding:'12px 15px'}}>
-              <div style={{fontSize:11,color:C.textMuted,marginBottom:8,letterSpacing:1}}>PARTIDO {idx+1}</div>
+              <div style={{fontSize:11,color:C.textMuted,marginBottom:8,letterSpacing:1}}>PARTIDO {idx+1}: {m.t1} vs {m.t2}</div>
               <div style={{display:'flex',gap:8,alignItems:'center'}}>
                 <div style={{flex:1,background:C.surfaceHigh,borderRadius:8,padding:'8px 10px',fontSize:13,color:bet?C.text:C.textDim,textAlign:'center'}}>{bet||'— Sin apostar —'}</div>
                 {real&&<div style={{fontSize:11,color:C.textMuted,flexShrink:0}}>Real: <b style={{color:C.text}}>{real}</b></div>}
@@ -236,11 +425,14 @@ function UserBetsViewer({user,bets,results,scoring,onBack}){
       </div>
     )
   }
+
   function ThirdView(){
-    const bet=bets?.third?.winner,real=results?.third?.winner,correct=bet&&real&&bet===real
+    const thirdMatch=(matches?.third||[])[0]
+    if(!thirdMatch)return<Card><div style={{color:C.textMuted,textAlign:'center',padding:20}}>Sin partido disponible</div></Card>
+    const bet=bets?.third?.[thirdMatch.id],real=results?.third?.[thirdMatch.id],correct=bet&&real&&bet===real
     return(
       <Card style={{padding:'13px 15px'}}>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:C.text,marginBottom:10}}>🥉 Ganador 3er puesto</div>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:C.text,marginBottom:10}}>🥉 {thirdMatch.t1} vs {thirdMatch.t2}</div>
         <div style={{display:'flex',gap:8,alignItems:'center',background:C.surfaceHigh,borderRadius:8,padding:'10px 12px'}}>
           <div style={{flex:1,fontSize:14,color:bet?C.text:C.textDim}}>{bet||'— Sin apostar —'}</div>
           {real&&<div style={{fontSize:11,color:C.textMuted}}>Real: <b style={{color:C.text}}>{real}</b></div>}
@@ -250,14 +442,18 @@ function UserBetsViewer({user,bets,results,scoring,onBack}){
       </Card>
     )
   }
+
   function FinalView(){
+    const finalMatch=(matches?.final||[])[0]
+    if(!finalMatch)return<Card><div style={{color:C.textMuted,textAlign:'center',padding:20}}>Sin partido disponible</div></Card>
     const fb=bets?.final||{}
     return(
       <div style={{display:'flex',flexDirection:'column',gap:10}}>
-        {[{field:'winner',label:'🏆 Campeón',pts:S.final_winner},{field:'runnerUp',label:'🥈 Subcampeón',pts:S.final_runner}].map(({field,label,pts})=>{
-          const bet=fb[field],real=results?.final?.[field],correct=bet&&real&&bet===real
+        <div style={{fontSize:13,color:C.textMuted,textAlign:'center'}}>{finalMatch.t1} vs {finalMatch.t2}</div>
+        {[{key:finalMatch.id+'_winner',label:'🏆 Campeón',pts:S.final_winner},{key:finalMatch.id+'_runner',label:'🥈 Subcampeón',pts:S.final_runner}].map(({key,label,pts})=>{
+          const bet=fb[key],real=results?.final?.[key],correct=bet&&real&&bet===real
           return(
-            <Card key={field} style={{padding:'12px 15px'}}>
+            <Card key={key} style={{padding:'12px 15px'}}>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:14,color:C.text,marginBottom:8}}>{label}</div>
               <div style={{display:'flex',gap:8,alignItems:'center',background:C.surfaceHigh,borderRadius:8,padding:'10px 12px'}}>
                 <div style={{flex:1,fontSize:14,color:bet?C.text:C.textDim}}>{bet||'— Sin apostar —'}</div>
@@ -271,7 +467,7 @@ function UserBetsViewer({user,bets,results,scoring,onBack}){
       </div>
     )
   }
-  const visiblePhases=PHASES.filter(p=>isPhaseVisible(p.id,results))
+
   return(
     <div style={{display:'flex',flexDirection:'column',gap:14}}>
       <div style={{display:'flex',alignItems:'center',gap:10}}>
@@ -327,10 +523,10 @@ function Rules(){
       <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:22,color:C.text,marginBottom:4}}>Reglas del juego</div>
       {[
         {icon:'📋',title:'¿En qué consiste?',text:'Cada participante hace sus predicciones antes de que empiece cada fase. Cuantos más aciertos, más puntos. Al final del torneo gana quien más puntos haya acumulado.'},
-        {icon:'⏳',title:'Plazos',text:'Las apuestas se cierran automáticamente 1 hora antes del primer partido de cada fase. Una vez cerrada la fase, no se pueden modificar las predicciones.'},
-        {icon:'🔓',title:'Desbloqueo de fases',text:'Cada fase eliminatoria se desbloquea cuando el administrador introduce todos los resultados de la fase anterior.'},
-        {icon:'👁',title:'Ver apuestas de otros',text:'Las apuestas de cada participante se pueden ver una vez que la fase ha comenzado o el administrador ha introducido todos sus resultados.'},
-        {icon:'✅',title:'Acceso',text:'El registro está sujeto a aprobación del administrador. Una vez aprobado recibirás acceso completo a la porra.'},
+        {icon:'⏳',title:'Plazos',text:'Las apuestas se cierran automáticamente 1 hora antes del primer partido de cada fase. Una vez cerrada la fase no se pueden modificar.'},
+        {icon:'🔓',title:'Desbloqueo de fases',text:'Cada fase eliminatoria se desbloquea cuando el administrador publica los cruces. Los cruces de eliminatorias los introduce manualmente el admin según el sorteo oficial de la FIFA.'},
+        {icon:'👁',title:'Ver apuestas de otros',text:'Las apuestas se pueden ver cuando la fase ha comenzado o el administrador ha introducido todos sus resultados.'},
+        {icon:'✅',title:'Acceso',text:'El registro está sujeto a aprobación del administrador.'},
         {icon:'📈',title:'Puntuación progresiva',text:'Cada fase vale más puntos que la anterior. La Final tiene tanto peso que cualquiera puede remontar hasta el último momento.'},
       ].map((s,i)=>(
         <Card key={i} style={{padding:'14px 16px'}}>
@@ -411,18 +607,12 @@ function LoginScreen({onLogin}){
   async function doRegister(){
     setErr('');setLoading(true)
     if(!name.trim()){setErr('Escribe tu nombre de usuario');setLoading(false);return}
-    if(!realName.trim()){setErr('Escribe tu nombre real para que el admin te identifique');setLoading(false);return}
+    if(!realName.trim()){setErr('Escribe tu nombre real');setLoading(false);return}
     if(pass.length<4){setErr('Mínimo 4 caracteres');setLoading(false);return}
     if(pass!==pass2){setErr('Las contraseñas no coinciden');setLoading(false);return}
     const{data:existing}=await supabase.from('porra_users').select('id').ilike('name',name.trim()).single()
     if(existing){setErr('Ese nombre ya está en uso');setLoading(false);return}
-    const{data,error}=await supabase.from('porra_users').insert({
-      name:name.trim(),
-      password_hash:hashPassword(pass),
-      role:'user',
-      status:'pending',
-      display_name:realName.trim(),
-    }).select().single()
+    const{data,error}=await supabase.from('porra_users').insert({name:name.trim(),password_hash:hashPassword(pass),role:'user',status:'pending',display_name:realName.trim()}).select().single()
     if(error){setErr('Error al crear cuenta');setLoading(false);return}
     localStorage.setItem('porra_user',JSON.stringify(data));onLogin(data);setLoading(false)
   }
@@ -446,11 +636,7 @@ function LoginScreen({onLogin}){
             <div><div style={{fontSize:11,color:C.textMuted,marginBottom:6,letterSpacing:1,textTransform:'uppercase'}}>{tab==='register'?'Nombre en el ranking':'Nombre'}</div><Input value={name} onChange={e=>setName(e.target.value)} onKeyDown={onKey} placeholder={tab==='register'?'Apodo para la clasificación':'Tu nombre'}/></div>
             <div><div style={{fontSize:11,color:C.textMuted,marginBottom:6,letterSpacing:1,textTransform:'uppercase'}}>Contraseña</div><Input type="password" value={pass} onChange={e=>setPass(e.target.value)} onKeyDown={onKey} placeholder="••••••"/></div>
             {tab==='register'&&<div><div style={{fontSize:11,color:C.textMuted,marginBottom:6,letterSpacing:1,textTransform:'uppercase'}}>Repite contraseña</div><Input type="password" value={pass2} onChange={e=>setPass2(e.target.value)} onKeyDown={onKey} placeholder="••••••"/></div>}
-            {tab==='register'&&(
-              <div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}33`,borderRadius:8,padding:'8px 12px',fontSize:12,color:C.textMuted}}>
-                ⏳ Tu cuenta quedará pendiente hasta que el administrador la apruebe
-              </div>
-            )}
+            {tab==='register'&&<div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}33`,borderRadius:8,padding:'8px 12px',fontSize:12,color:C.textMuted}}>⏳ Tu cuenta quedará pendiente hasta que el administrador la apruebe</div>}
             {err&&<div style={{background:`${C.accent}22`,border:`1px solid ${C.accent}55`,borderRadius:8,padding:'8px 12px',fontSize:13,color:C.accentHover,textAlign:'center'}}>⚠ {err}</div>}
             <Btn onClick={tab==='login'?doLogin:doRegister} disabled={loading} full variant={tab==='login'?'primary':'success'}>{loading?'Cargando…':tab==='login'?'⚽ Entrar':'✓ Solicitar acceso'}</Btn>
           </div>
@@ -460,8 +646,8 @@ function LoginScreen({onLogin}){
   )
 }
 
-function Leaderboard({users,betsMap,results,scoring,currentUserId,onViewUser}){
-  const scored=users.filter(u=>u.role!=='admin'&&u.status==='approved').map(u=>{const{total,breakdown}=calcScore(betsMap[u.id]||{},results,scoring);return{...u,total,breakdown}}).sort((a,b)=>b.total-a.total)
+function Leaderboard({users,betsMap,results,matches,scoring,currentUserId,onViewUser}){
+  const scored=users.filter(u=>u.role!=='admin'&&u.status==='approved').map(u=>{const{total,breakdown}=calcScore(betsMap[u.id]||{},results,matches,scoring);return{...u,total,breakdown}}).sort((a,b)=>b.total-a.total)
   const medals=['🥇','🥈','🥉']
   return(
     <div style={{display:'flex',flexDirection:'column',gap:10}}>
@@ -493,146 +679,94 @@ function Leaderboard({users,betsMap,results,scoring,currentUserId,onViewUser}){
   )
 }
 
-function GroupBets({groupBets,onChange,disabled,scoring}){
-  const S={...DEFAULT_SCORING,...scoring}
-  const[local,setLocal]=useState(groupBets||{})
-  useEffect(()=>setLocal(groupBets||{}),[groupBets])
-  function handleChange(g,nb){setLocal(prev=>({...prev,[g]:nb}));onChange(g,nb)}
-  return(
-    <div style={{display:'flex',flexDirection:'column',gap:14}}>
-      <div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.silver}}>🥇 <b style={{color:C.gold}}>1º exacto +{S.groups_first}pts</b> · 🥈 <b style={{color:C.silver}}>2º exacto +{S.groups_second}pts</b> · ✅ Clasificado <b>+{S.groups_qualified}pt</b></div>
-      {Object.entries(GROUPS).map(([g,teams])=>{
-        const bet=local[g]||['','']
-        return(
-          <Card key={g} style={{padding:'13px 15px'}}>
-            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:15,color:C.accent,marginBottom:10,letterSpacing:1.5}}>GRUPO {g}</div>
-            {[0,1].map(pos=>(
-              <div key={pos} style={{display:'flex',alignItems:'center',gap:8,marginBottom:pos===0?8:0}}>
-                <span style={{fontSize:16,minWidth:22}}>{pos===0?'🥇':'🥈'}</span>
-                <select disabled={disabled} value={bet[pos]||''} onChange={e=>{const nb=[...bet];nb[pos]=e.target.value;if(pos===0&&nb[1]===e.target.value)nb[1]='';if(pos===1&&nb[0]===e.target.value)nb[0]='';handleChange(g,nb)}} style={{flex:1,background:C.surfaceHigh,border:`1px solid ${C.border}`,borderRadius:8,padding:'8px 10px',color:bet[pos]?C.text:C.textMuted,fontSize:14,fontFamily:'inherit',cursor:disabled?'not-allowed':'pointer'}}>
-                  <option value=''>— {pos===0?'1º':'2º'} clasificado —</option>
-                  {teams.map(t=><option key={t} value={t} disabled={pos===1?bet[0]===t:bet[1]===t}>{t}</option>)}
-                </select>
-              </div>
-            ))}
-          </Card>
-        )
-      })}
-    </div>
-  )
-}
-
-function KnockoutBets({phaseId,phaseBets,results,onChange,disabled,scoring}){
-  const S={...DEFAULT_SCORING,...scoring}
-  const[local,setLocal]=useState(phaseBets||{})
-  useEffect(()=>setLocal(phaseBets||{}),[phaseBets])
-  function handleChange(mid,team){setLocal(prev=>({...prev,[mid]:team}));onChange(mid,team)}
-  function getTeams(){
-    if(phaseId==='r32'){const q=[];Object.keys(GROUPS).forEach(g=>{const r=results?.groups?.[g]||[];q.push(r[0]||`1º Grupo ${g}`);q.push(r[1]||`2º Grupo ${g}`)});for(let i=0;i<8;i++)q.push(`Mejor 3º #${i+1}`);return q}
-    const prev={r16:'r32',qf:'r16',sf:'qf'}[phaseId]
-    return Object.values(results?.[prev]||{}).filter(Boolean)
-  }
-  const teams=getTeams(),matches=[]
-  for(let i=0;i<teams.length;i+=2){if(teams[i+1])matches.push({id:`m${i}`,t1:teams[i],t2:teams[i+1]})}
-  const pts=S[phaseId]||0
-  if(matches.length===0)return<Card><div style={{color:C.textMuted,textAlign:'center',padding:24,fontSize:14}}>Los enfrentamientos se actualizarán cuando termine la fase anterior</div></Card>
-  return(
-    <div style={{display:'flex',flexDirection:'column',gap:12}}>
-      <div style={{background:`${C.blue}18`,border:`1px solid ${C.blue}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.silver}}>✅ Acierto por partido: <b style={{color:'#5bb3f5'}}>+{pts} pts</b></div>
-      {matches.map((m,idx)=>{
-        const bet=local[m.id]
-        return(
-          <Card key={m.id} style={{padding:'13px 15px'}}>
-            <div style={{fontSize:11,color:C.textMuted,marginBottom:9,letterSpacing:1}}>PARTIDO {idx+1}</div>
-            <div style={{display:'flex',gap:8}}>
-              {[m.t1,m.t2].map(team=><button key={team} disabled={disabled} onClick={()=>!disabled&&handleChange(m.id,team)} style={{flex:1,padding:'10px 6px',borderRadius:10,cursor:disabled?'not-allowed':'pointer',border:`2px solid ${bet===team?C.green:C.border}`,background:bet===team?`${C.green}22`:C.surfaceHigh,color:bet===team?C.greenSoft:C.text,fontWeight:700,fontSize:13,fontFamily:'inherit',transition:'all .15s',textAlign:'center',wordBreak:'break-word'}}>{bet===team&&'✓ '}{team}</button>)}
-            </div>
-          </Card>
-        )
-      })}
-    </div>
-  )
-}
-
-function ThirdPlaceBet({thirdBet,results,onChange,disabled,scoring}){
-  const S={...DEFAULT_SCORING,...scoring}
-  const[local,setLocal]=useState(thirdBet||{})
-  useEffect(()=>setLocal(thirdBet||{}),[thirdBet])
-  const losers=getSFLosers(results)
-  function handleChange(team){setLocal({winner:team});onChange({winner:team})}
-  return(
-    <div style={{display:'flex',flexDirection:'column',gap:14}}>
-      <div style={{background:`${C.silver}18`,border:`1px solid ${C.silver}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.silver}}>🥉 <b style={{color:C.silver}}>Acertar ganador: +{S.third} pts</b></div>
-      <Card style={{padding:'13px 15px'}}>
-        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:C.text,marginBottom:10}}>🥉 ¿Quién gana el 3er puesto?</div>
-        {losers.length<2?<div style={{color:C.textMuted,fontSize:13,textAlign:'center',padding:12}}>Los equipos se conocerán tras las Semifinales</div>:(
-          <div style={{display:'flex',gap:8}}>
-            {losers.map(team=><button key={team} disabled={disabled} onClick={()=>!disabled&&handleChange(team)} style={{flex:1,padding:'12px 8px',borderRadius:10,cursor:disabled?'not-allowed':'pointer',border:`2px solid ${local.winner===team?C.silver:C.border}`,background:local.winner===team?`${C.silver}22`:C.surfaceHigh,color:local.winner===team?C.silver:C.text,fontWeight:700,fontSize:14,fontFamily:'inherit',transition:'all .15s',textAlign:'center',wordBreak:'break-word'}}>{local.winner===team&&'✓ '}{team}</button>)}
-          </div>
-        )}
-      </Card>
-    </div>
-  )
-}
-
-function FinalBets({finalBet,results,onChange,disabled,scoring}){
-  const S={...DEFAULT_SCORING,...scoring}
-  const[local,setLocal]=useState(finalBet||{})
-  useEffect(()=>setLocal(finalBet||{}),[finalBet])
-  const sfW=Object.values(results?.sf||{}).filter(Boolean)
-  const finalists=sfW.length>=2?sfW.slice(0,2):['Finalista 1','Finalista 2']
-  function handleChange(bet){setLocal(bet);onChange(bet)}
-  return(
-    <div style={{display:'flex',flexDirection:'column',gap:14}}>
-      <div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.silver}}>🏆 <b style={{color:C.gold}}>Campeón +{S.final_winner}pts</b> · 🥈 <b style={{color:C.silver}}>Subcampeón +{S.final_runner}pts</b></div>
-      {[{field:'winner',label:'🏆 Campeón'},{field:'runnerUp',label:'🥈 Subcampeón'}].map(({field,label})=>(
-        <Card key={field} style={{padding:'13px 15px'}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:C.text,marginBottom:10}}>{label}</div>
-          <div style={{display:'flex',gap:8}}>
-            {finalists.map(t=><button key={t} disabled={disabled} onClick={()=>!disabled&&handleChange({...local,[field]:t})} style={{flex:1,padding:'10px 6px',borderRadius:10,cursor:disabled?'not-allowed':'pointer',border:`2px solid ${local[field]===t?C.gold:C.border}`,background:local[field]===t?`${C.gold}22`:C.surfaceHigh,color:local[field]===t?C.gold:C.text,fontWeight:700,fontSize:13,fontFamily:'inherit',transition:'all .15s',textAlign:'center',wordBreak:'break-word'}}>{local[field]===t&&'✓ '}{t}</button>)}
-          </div>
-        </Card>
-      ))}
-    </div>
-  )
-}
-
-function AdminPanel({results,scoring,users,onSave,onSaveScoring,onApprove,onReject,onLoadAll}){
+// ── ADMIN PANEL ───────────────────────────────────────────────────────────────
+function AdminPanel({results,matches,scoring,users,onSave,onSaveMatches,onSaveScoring,onApprove,onReject,onLoadAll}){
   const[local,setLocal]=useState(JSON.parse(JSON.stringify(results||{})))
+  const[localMatches,setLocalMatches]=useState(JSON.parse(JSON.stringify(matches||{})))
   const[localScoring,setLocalScoring]=useState({...DEFAULT_SCORING,...scoring})
-  const[activePhase,setActivePhase]=useState('groups')
   const[activeSection,setActiveSection]=useState('users')
+  const[activePhase,setActivePhase]=useState('r32')
   const[saved,setSaved]=useState(false)
   const[simulating,setSimulating]=useState(null)
-  const[confirmReset,setConfirmReset]=useState(null)
+
   useEffect(()=>setLocal(JSON.parse(JSON.stringify(results||{}))),[results])
+  useEffect(()=>setLocalMatches(JSON.parse(JSON.stringify(matches||{}))),[matches])
   useEffect(()=>setLocalScoring({...DEFAULT_SCORING,...scoring}),[scoring])
 
   const pending=users.filter(u=>u.status==='pending')
   const approved=users.filter(u=>u.role!=='admin'&&u.status==='approved')
 
-  const save=async(data)=>{await onSave(data||local);setSaved(true);setTimeout(()=>setSaved(false),2000)}
-  const setGR=(g,pos,val)=>setLocal(r=>{const arr=[...(r?.groups?.[g]||['',''])];arr[pos]=val;return{...r,groups:{...(r.groups||{}),[g]:arr}}})
-
-  async function simPhase(phaseId){
-    setSimulating(phaseId);const updated=simulatePhase(phaseId,local)
-    setLocal(updated);await onSave(updated)
-    setSimulating(null);setSaved(true);setTimeout(()=>setSaved(false),2000)
-  }
-  async function simAll(){
-    setSimulating('all');let r={}
-    for(const p of['groups','r32','r16','qf','sf','third','final'])r=simulatePhase(p,r)
-    setLocal(r);await onSave(r)
-    setSimulating(null);setSaved(true);setTimeout(()=>setSaved(false),2000)
-  }
-  async function doReset(phaseId){
-    const updated=resetPhase(phaseId,local)
-    setLocal(updated);await onSave(updated)
-    setConfirmReset(null);setSaved(true);setTimeout(()=>setSaved(false),2000)
+  async function saveAll(){
+    await onSave(local)
+    await onSaveMatches(localMatches)
+    setSaved(true);setTimeout(()=>setSaved(false),2000)
   }
   async function saveScoring(){await onSaveScoring(localScoring);setSaved(true);setTimeout(()=>setSaved(false),2000)}
 
-  const phaseRequires={groups:null,r32:'groups',r16:'r32',qf:'r16',sf:'qf',third:'sf',final:'sf'}
+  const setGR=(g,pos,val)=>setLocal(r=>{const arr=[...(r?.groups?.[g]||['',''])];arr[pos]=val;return{...r,groups:{...(r.groups||{}),[g]:arr}}})
+
+  // Manage matches for a knockout phase
+  function getPhaseMatchCount(phaseId){return PHASE_MATCH_COUNT[phaseId]||0}
+
+  function ensureMatches(phaseId){
+    const count=getPhaseMatchCount(phaseId)
+    const existing=localMatches[phaseId]||[]
+    const ms=[...existing]
+    while(ms.length<count)ms.push({id:`m${ms.length*2}`,t1:'',t2:''})
+    return ms
+  }
+
+  function setMatchTeam(phaseId,matchId,field,val){
+    setLocalMatches(prev=>{
+      const ms=(prev[phaseId]||[]).map(m=>m.id===matchId?{...m,[field]:val}:m)
+      return{...prev,[phaseId]:ms}
+    })
+  }
+
+  function setMatchWinner(phaseId,matchId,winner){
+    setLocal(prev=>{
+      const phaseRes={...(prev[phaseId]||{}),[matchId]:winner}
+      return{...prev,[phaseId]:phaseRes}
+    })
+  }
+
+  // Simulation
+  async function simPhase(phaseId){
+    setSimulating(phaseId)
+    let newMatches=generateSimMatches(phaseId,local,localMatches)
+    setLocalMatches(newMatches)
+    const newResults=simulatePhaseResults(phaseId,local,newMatches)
+    setLocal(newResults)
+    await onSaveMatches(newMatches)
+    await onSave(newResults)
+    setSimulating(null);setSaved(true);setTimeout(()=>setSaved(false),2000)
+  }
+
+  async function simAll(){
+    setSimulating('all')
+    let r={},m={}
+    // Groups
+    r=simulatePhaseResults('groups',r,m)
+    // Each knockout phase
+    for(const pid of['r32','r16','qf','sf','third','final']){
+      m=generateSimMatches(pid,r,m)
+      r=simulatePhaseResults(pid,r,m)
+    }
+    // Final runner up
+    const finalMatch=(m.final||[])[0]
+    if(finalMatch){
+      const winner=r.final?.[finalMatch.id]
+      const runner=winner===finalMatch.t1?finalMatch.t2:finalMatch.t1
+      r.final[finalMatch.id+'_winner']=winner
+      r.final[finalMatch.id+'_runner']=runner
+      delete r.final[finalMatch.id]
+    }
+    setLocal(r);setLocalMatches(m)
+    await onSaveMatches(m);await onSave(r)
+    setSimulating(null);setSaved(true);setTimeout(()=>setSaved(false),2000)
+  }
+
+  const knockoutPhases=PHASES.filter(p=>p.id!=='groups')
 
   return(
     <div style={{display:'flex',flexDirection:'column',gap:16}}>
@@ -642,8 +776,8 @@ function AdminPanel({results,scoring,users,onSave,onSaveScoring,onApprove,onReje
       </div>
 
       <div style={{display:'flex',gap:4,background:C.surfaceHigh,borderRadius:10,padding:4,overflowX:'auto'}}>
-        {[['users',`👥 Usuarios${pending.length>0?` (${pending.length})`:''}`,],['sim','🎲 Simular'],['results','📋 Resultados'],['scoring','🏅 Puntos']].map(([id,label])=>(
-          <button key={id} onClick={()=>setActiveSection(id)} style={{flex:1,whiteSpace:'nowrap',padding:'8px 10px',border:'none',borderRadius:8,cursor:'pointer',background:activeSection===id?C.accent:'transparent',color:activeSection===id?'#fff':C.textMuted,fontWeight:800,fontSize:12,fontFamily:"'Barlow Condensed',sans-serif"}}>{label}</button>
+        {[['users',`👥${pending.length>0?` (${pending.length})`:''}`],['matches','⚽ Cruces'],['results','📋 Resultados'],['sim','🎲 Simular'],['scoring','🏅 Puntos']].map(([id,label])=>(
+          <button key={id} onClick={()=>setActiveSection(id)} style={{flex:1,whiteSpace:'nowrap',padding:'8px 6px',border:'none',borderRadius:8,cursor:'pointer',background:activeSection===id?C.accent:'transparent',color:activeSection===id?'#fff':C.textMuted,fontWeight:800,fontSize:12,fontFamily:"'Barlow Condensed',sans-serif"}}>{label}</button>
         ))}
       </div>
 
@@ -667,11 +801,10 @@ function AdminPanel({results,scoring,users,onSave,onSaveScoring,onApprove,onReje
                   </div>
                 </Card>
               ))}
-              <div style={{height:1,background:C.border,margin:'4px 0'}}/>
+              <div style={{height:1,background:C.border}}/>
             </>
           )}
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:C.textMuted}}>✅ Participantes aprobados ({approved.length})</div>
-          {approved.length===0&&<Card><div style={{color:C.textMuted,textAlign:'center',padding:12,fontSize:13}}>Ningún participante aprobado todavía</div></Card>}
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:C.textMuted}}>✅ Aprobados ({approved.length})</div>
           {approved.map(u=>(
             <div key={u.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:'12px 14px'}}>
               <div>
@@ -684,69 +817,123 @@ function AdminPanel({results,scoring,users,onSave,onSaveScoring,onApprove,onReje
         </div>
       )}
 
+      {/* CRUCES - Admin introduces matchups manually */}
+      {activeSection==='matches'&&(
+        <div style={{display:'flex',flexDirection:'column',gap:14}}>
+          <div style={{background:`${C.blue}18`,border:`1px solid ${C.blue}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.textMuted}}>
+            Introduce los equipos que se enfrentan en cada partido. Una vez publicados, los participantes podrán hacer sus apuestas.
+          </div>
+
+          {/* Phase selector */}
+          <div style={{display:'flex',overflowX:'auto',gap:6,paddingBottom:4,scrollbarWidth:'none'}}>
+            {knockoutPhases.map(p=><button key={p.id} onClick={()=>setActivePhase(p.id)} style={{whiteSpace:'nowrap',padding:'6px 14px',borderRadius:20,flexShrink:0,border:`1px solid ${activePhase===p.id?C.accent:C.border}`,background:activePhase===p.id?C.accent:'transparent',color:activePhase===p.id?'#fff':C.textMuted,cursor:'pointer',fontSize:12,fontWeight:700,fontFamily:'inherit'}}>{p.icon} {p.short}</button>)}
+          </div>
+
+          {knockoutPhases.filter(p=>p.id===activePhase).map(p=>{
+            const ms=ensureMatches(p.id)
+            return(
+              <div key={p.id} style={{display:'flex',flexDirection:'column',gap:10}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:C.text}}>{p.label}</div>
+                {ms.map((m,idx)=>(
+                  <Card key={m.id} style={{padding:'13px 15px'}}>
+                    <div style={{fontSize:11,color:C.textMuted,marginBottom:10,letterSpacing:1}}>PARTIDO {idx+1}</div>
+                    <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                      <Input value={m.t1||''} onChange={e=>setMatchTeam(p.id,m.id,'t1',e.target.value)} placeholder="Equipo 1" style={{fontSize:13,padding:'8px 10px'}}/>
+                      <div style={{color:C.textMuted,fontWeight:800,flexShrink:0}}>vs</div>
+                      <Input value={m.t2||''} onChange={e=>setMatchTeam(p.id,m.id,'t2',e.target.value)} placeholder="Equipo 2" style={{fontSize:13,padding:'8px 10px'}}/>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )
+          })}
+
+          <Btn onClick={saveAll} variant='success' full>{saved?'✓ Publicado':'📢 Publicar cruces'}</Btn>
+        </div>
+      )}
+
+      {/* RESULTADOS */}
+      {activeSection==='results'&&(
+        <div style={{display:'flex',flexDirection:'column',gap:14}}>
+          <div style={{background:`${C.accent}18`,border:`1px solid ${C.accent}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.silver}}>Introduce el ganador de cada partido una vez disputado.</div>
+
+          {/* Groups */}
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:C.text}}>⚽ Fase de Grupos</div>
+          <div style={{display:'flex',flexDirection:'column',gap:10}}>
+            {Object.entries(GROUPS).map(([g,teams])=>{
+              const res=local?.groups?.[g]||['','']
+              return(
+                <Card key={g} style={{padding:'12px 15px'}}>
+                  <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,color:C.accent,marginBottom:8,letterSpacing:1}}>GRUPO {g}</div>
+                  {[0,1].map(pos=>(
+                    <div key={pos} style={{display:'flex',gap:8,marginBottom:pos===0?6:0,alignItems:'center'}}>
+                      <span style={{fontSize:15}}>{pos===0?'🥇':'🥈'}</span>
+                      <select value={res[pos]||''} onChange={e=>setGR(g,pos,e.target.value)} style={{flex:1,background:C.surfaceHigh,border:`1px solid ${C.border}`,borderRadius:8,padding:'7px 10px',color:res[pos]?C.text:C.textMuted,fontSize:13,fontFamily:'inherit'}}>
+                        <option value=''>— {pos===0?'1º':'2º'} —</option>
+                        {teams.map(t=><option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </Card>
+              )
+            })}
+          </div>
+
+          {/* Knockout results */}
+          {knockoutPhases.map(p=>{
+            const phaseMatches=localMatches[p.id]||[]
+            if(phaseMatches.filter(m=>m.t1&&m.t2).length===0)return null
+            return(
+              <div key={p.id} style={{display:'flex',flexDirection:'column',gap:10}}>
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:C.text}}>{p.icon} {p.label}</div>
+                {phaseMatches.filter(m=>m.t1&&m.t2).map((m,idx)=>{
+                  const winner=local[p.id]?.[m.id]
+                  const winnerKey=p.id==='final'?m.id+'_winner':m.id
+                  const runnerKey=m.id+'_runner'
+                  const currentWinner=p.id==='final'?local[p.id]?.[winnerKey]:winner
+                  return(
+                    <Card key={m.id} style={{padding:'12px 15px'}}>
+                      <div style={{fontSize:11,color:C.textMuted,marginBottom:8,letterSpacing:1}}>PARTIDO {idx+1}</div>
+                      {p.id==='final'?(
+                        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                          <div style={{fontSize:12,color:C.textMuted}}>🏆 Campeón</div>
+                          <div style={{display:'flex',gap:6}}>
+                            {[m.t1,m.t2].map(team=><button key={team} onClick={()=>{setMatchWinner('final',winnerKey,team);setMatchWinner('final',runnerKey,team===m.t1?m.t2:m.t1)}} style={{flex:1,padding:'8px 6px',borderRadius:8,border:`2px solid ${local.final?.[winnerKey]===team?C.gold:C.border}`,background:local.final?.[winnerKey]===team?`${C.gold}22`:C.surfaceHigh,color:local.final?.[winnerKey]===team?C.gold:C.text,fontWeight:700,fontSize:13,fontFamily:'inherit',cursor:'pointer',textAlign:'center'}}>{local.final?.[winnerKey]===team&&'✓ '}{team}</button>)}
+                          </div>
+                        </div>
+                      ):(
+                        <div style={{display:'flex',gap:6}}>
+                          {[m.t1,m.t2].filter(Boolean).map(team=><button key={team} onClick={()=>setMatchWinner(p.id,m.id,team)} style={{flex:1,padding:'8px 6px',borderRadius:8,border:`2px solid ${local[p.id]?.[m.id]===team?C.green:C.border}`,background:local[p.id]?.[m.id]===team?`${C.green}22`:C.surfaceHigh,color:local[p.id]?.[m.id]===team?C.greenSoft:C.text,fontWeight:700,fontSize:13,fontFamily:'inherit',cursor:'pointer',textAlign:'center'}}>{local[p.id]?.[m.id]===team&&'✓ '}{team}</button>)}
+                        </div>
+                      )}
+                    </Card>
+                  )
+                })}
+              </div>
+            )
+          })}
+
+          <Btn onClick={saveAll} variant='success' full>{saved?'✓ Guardado':'💾 Guardar resultados'}</Btn>
+        </div>
+      )}
+
       {/* SIMULADOR */}
       {activeSection==='sim'&&(
         <Card style={{borderColor:`${C.blue}44`}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:'#5bb3f5',marginBottom:12}}>🎲 Simulador por fases</div>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:'#5bb3f5',marginBottom:8}}>🎲 Simulador por fases</div>
+          <div style={{fontSize:12,color:C.textMuted,marginBottom:12}}>Genera cruces y resultados aleatorios para probar la app.</div>
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
-            {PHASES.map(p=>{
-              const req=phaseRequires[p.id],blocked=req&&!local[req]
-              const hasData=!!(local[p.id]&&(p.id==='groups'?Object.keys(local.groups||{}).length>0:Object.keys(local[p.id]||{}).length>0))
-              return(
-                <div key={p.id} style={{display:'flex',alignItems:'center',gap:8,background:C.surfaceHigh,borderRadius:10,padding:'10px 12px'}}>
-                  <div style={{flex:1,fontSize:13,color:blocked?C.textDim:C.text}}>{p.icon} {p.label}</div>
-                  <div style={{display:'flex',gap:6}}>
-                    {hasData&&(confirmReset===p.id?(
-                      <div style={{display:'flex',gap:4}}>
-                        <Btn onClick={()=>doReset(p.id)} variant='danger' small>¿Seguro?</Btn>
-                        <Btn onClick={()=>setConfirmReset(null)} variant='ghost' small>No</Btn>
-                      </div>
-                    ):(
-                      <Btn onClick={()=>setConfirmReset(p.id)} variant='ghost' small style={{color:C.accent,borderColor:C.accent}}>🗑</Btn>
-                    ))}
-                    <Btn onClick={()=>!blocked&&simPhase(p.id)} disabled={!!blocked||simulating===p.id} variant='blue' small style={{minWidth:75}}>{simulating===p.id?'…':'🎲 Sim'}</Btn>
-                  </div>
-                </div>
-              )
-            })}
+            {PHASES.map(p=>(
+              <div key={p.id} style={{display:'flex',alignItems:'center',gap:8,background:C.surfaceHigh,borderRadius:10,padding:'10px 12px'}}>
+                <div style={{flex:1,fontSize:13,color:C.text}}>{p.icon} {p.label}</div>
+                <Btn onClick={()=>simPhase(p.id)} disabled={simulating===p.id} variant='blue' small style={{minWidth:80}}>{simulating===p.id?'…':'🎲 Sim'}</Btn>
+              </div>
+            ))}
             <div style={{borderTop:`1px solid ${C.border}`,paddingTop:10,marginTop:4}}>
               <Btn onClick={simAll} disabled={!!simulating} variant='gold' full>{simulating==='all'?'Simulando…':'🎲 Simular todo'}</Btn>
             </div>
           </div>
         </Card>
-      )}
-
-      {/* RESULTADOS */}
-      {activeSection==='results'&&(
-        <>
-          <div style={{background:`${C.accent}18`,border:`1px solid ${C.accent}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.silver}}>Introduce los resultados reales para calcular los puntos automáticamente.</div>
-          <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
-            {PHASES.map(p=><button key={p.id} onClick={()=>setActivePhase(p.id)} style={{padding:'6px 16px',borderRadius:20,border:`1px solid ${activePhase===p.id?C.accent:C.border}`,background:activePhase===p.id?C.accent:'transparent',color:activePhase===p.id?'#fff':C.textMuted,cursor:'pointer',fontSize:13,fontWeight:700,fontFamily:'inherit'}}>{p.short}</button>)}
-          </div>
-          {activePhase==='groups'&&(
-            <div style={{display:'flex',flexDirection:'column',gap:10}}>
-              {Object.entries(GROUPS).map(([g,teams])=>{
-                const res=local?.groups?.[g]||['','']
-                return(
-                  <Card key={g} style={{padding:'12px 15px'}}>
-                    <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,color:C.accent,marginBottom:8,letterSpacing:1}}>GRUPO {g}</div>
-                    {[0,1].map(pos=>(
-                      <div key={pos} style={{display:'flex',gap:8,marginBottom:pos===0?6:0,alignItems:'center'}}>
-                        <span style={{fontSize:15}}>{pos===0?'🥇':'🥈'}</span>
-                        <select value={res[pos]||''} onChange={e=>setGR(g,pos,e.target.value)} style={{flex:1,background:C.surfaceHigh,border:`1px solid ${C.border}`,borderRadius:8,padding:'7px 10px',color:res[pos]?C.text:C.textMuted,fontSize:13,fontFamily:'inherit'}}>
-                          <option value=''>— {pos===0?'1º':'2º'} —</option>
-                          {teams.map(t=><option key={t} value={t}>{t}</option>)}
-                        </select>
-                      </div>
-                    ))}
-                  </Card>
-                )
-              })}
-            </div>
-          )}
-          {activePhase!=='groups'&&<Card><div style={{color:C.textMuted,textAlign:'center',padding:20,fontSize:13}}>Los resultados de eliminatorias se generan al simular o al completar la fase anterior.</div></Card>}
-          <Btn onClick={()=>save()} variant='success' full>{saved?'✓ Guardado':'💾 Guardar resultados'}</Btn>
-        </>
       )}
 
       {/* PUNTUACIÓN */}
@@ -773,11 +960,13 @@ function AdminPanel({results,scoring,users,onSave,onSaveScoring,onApprove,onReje
   )
 }
 
+// ── MAIN APP ──────────────────────────────────────────────────────────────────
 export default function App(){
   const[session,setSession]=useState(null)
   const[users,setUsers]=useState([])
   const[betsMap,setBetsMap]=useState({})
   const[results,setResults]=useState({})
+  const[matches,setMatches]=useState({})
   const[scoring,setScoring]=useState(DEFAULT_SCORING)
   const[activeTab,setActiveTab]=useState('ranking')
   const[activePhase,setActivePhase]=useState('groups')
@@ -789,30 +978,28 @@ export default function App(){
   useEffect(()=>{const s=localStorage.getItem('porra_user');if(s)try{setSession(JSON.parse(s))}catch{}},[])
 
   const loadAll=useCallback(async()=>{
-    const[{data:ud},{data:bd},{data:rd},{data:cd}]=await Promise.all([
+    const[{data:ud},{data:bd},{data:rd},{data:cd},{data:md}]=await Promise.all([
       supabase.from('porra_users').select('id,name,role,display_name,status'),
       supabase.from('porra_bets').select('user_id,phase,data'),
       supabase.from('porra_results').select('phase,data'),
       supabase.from('porra_config').select('key,value'),
+      supabase.from('porra_matches').select('key,value'),
     ])
     setUsers(ud||[])
     const map={};(bd||[]).forEach(b=>{if(!map[b.user_id])map[b.user_id]={};map[b.user_id][b.phase]=b.data});setBetsMap(map)
     const res={};(rd||[]).forEach(r=>{res[r.phase]=r.data});setResults(res)
     const cfg=(cd||[]).find(c=>c.key==='scoring');if(cfg)setScoring({...DEFAULT_SCORING,...cfg.value})
+    const matchData={};(md||[]).forEach(m=>{matchData[m.key]=m.value});setMatches(matchData)
     setLoaded(true)
   },[])
 
   useEffect(()=>{loadAll()},[loadAll])
 
-  // Refresh session from DB to catch status changes
   useEffect(()=>{
     if(!session)return
     const interval=setInterval(async()=>{
       const{data}=await supabase.from('porra_users').select('*').eq('id',session.id).single()
-      if(data&&data.status!==session.status){
-        localStorage.setItem('porra_user',JSON.stringify(data))
-        setSession(data)
-      }
+      if(data&&data.status!==session.status){localStorage.setItem('porra_user',JSON.stringify(data));setSession(data)}
     },10000)
     return()=>clearInterval(interval)
   },[session])
@@ -823,6 +1010,7 @@ export default function App(){
       .on('postgres_changes',{event:'*',schema:'public',table:'porra_results'},loadAll)
       .on('postgres_changes',{event:'*',schema:'public',table:'porra_users'},loadAll)
       .on('postgres_changes',{event:'*',schema:'public',table:'porra_config'},loadAll)
+      .on('postgres_changes',{event:'*',schema:'public',table:'porra_matches'},loadAll)
       .subscribe()
     return()=>supabase.removeChannel(ch)
   },[loadAll])
@@ -836,6 +1024,7 @@ export default function App(){
     if(error){notify('❌ Error al guardar');return}
     notify('✓ Apuesta guardada')
   }
+
   async function handleSaveResults(newResults){
     setResults(newResults)
     for(const[phase,data]of Object.entries(newResults)){
@@ -843,24 +1032,28 @@ export default function App(){
     }
     notify('✓ Resultados guardados')
   }
+
+  async function handleSaveMatches(newMatches){
+    setMatches(newMatches)
+    for(const[key,value]of Object.entries(newMatches)){
+      await supabase.from('porra_matches').upsert({key,value,updated_at:new Date().toISOString()},{onConflict:'key'})
+    }
+    notify('✓ Cruces guardados')
+  }
+
   async function handleSaveScoring(newScoring){
     setScoring(newScoring)
     await supabase.from('porra_config').upsert({key:'scoring',value:newScoring,updated_at:new Date().toISOString()},{onConflict:'key'})
     notify('✓ Puntuación actualizada')
   }
-  async function handleApprove(userId){
-    await supabase.from('porra_users').update({status:'approved'}).eq('id',userId)
-    await loadAll();notify('✓ Usuario aprobado')
-  }
-  async function handleReject(userId){
-    await supabase.from('porra_bets').delete().eq('user_id',userId)
-    await supabase.from('porra_users').delete().eq('id',userId)
-    await loadAll();notify('✓ Usuario rechazado')
-  }
+
+  async function handleApprove(userId){await supabase.from('porra_users').update({status:'approved'}).eq('id',userId);await loadAll();notify('✓ Usuario aprobado')}
+  async function handleReject(userId){await supabase.from('porra_bets').delete().eq('user_id',userId);await supabase.from('porra_users').delete().eq('id',userId);await loadAll();notify('✓ Usuario rechazado')}
+
   function handleShare(){
-    const url=window.location.href,text='¡Únete a la Porra Mundial 2026 de La Viuda! Haz tus predicciones aquí:'
+    const url=window.location.href,text='¡Únete a la Porra Mundial 2026 de La Viuda!'
     if(navigator.share){navigator.share({title:'Porra Mundial 2026',text,url}).catch(()=>{})}
-    else{navigator.clipboard.writeText(url).then(()=>notify('✓ URL copiada')).catch(()=>notify('URL: '+url))}
+    else{navigator.clipboard.writeText(url).then(()=>notify('✓ URL copiada')).catch(()=>{})}
   }
   function handleLogout(){localStorage.removeItem('porra_user');setSession(null)}
 
@@ -872,8 +1065,6 @@ export default function App(){
   )
 
   if(!session)return<LoginScreen onLogin={setSession}/>
-
-  // Pending users see waiting screen (except admin)
   if(session.status==='pending'&&session.role!=='admin')return<PendingScreen user={session} onLogout={handleLogout}/>
 
   if(showProfile)return(
@@ -893,7 +1084,7 @@ export default function App(){
         <Logo small/><div style={{fontSize:13,color:C.textMuted}}>{session.display_name||session.name}</div>
       </header>
       <main style={{maxWidth:560,margin:'0 auto',padding:'16px 14px'}}>
-        <UserBetsViewer user={viewingUser} bets={betsMap[viewingUser.id]||{}} results={results} scoring={scoring} onBack={()=>setViewingUser(null)}/>
+        <UserBetsViewer user={viewingUser} bets={betsMap[viewingUser.id]||{}} results={results} matches={matches} scoring={scoring} onBack={()=>setViewingUser(null)}/>
       </main>
     </div>
   )
@@ -901,7 +1092,7 @@ export default function App(){
   const userBets=betsMap[session.id]||{}
   const phase=PHASES.find(p=>p.id===activePhase)
   const closed=isClosed(phase?.deadline||'')
-  const unlocked=isPhaseUnlocked(activePhase,results)
+  const unlocked=isPhaseUnlocked(activePhase,results,matches)
   const pendingCount=users.filter(u=>u.status==='pending').length
 
   const TABS=[
@@ -926,28 +1117,35 @@ export default function App(){
           <Btn onClick={handleLogout} variant='ghost' small>Salir</Btn>
         </div>
       </header>
+
       <main style={{maxWidth:560,margin:'0 auto',padding:'16px 14px'}}>
-        {activeTab==='ranking'&&<Leaderboard users={users} betsMap={betsMap} results={results} scoring={scoring} currentUserId={session.id} onViewUser={setViewingUser}/>}
+        {activeTab==='ranking'&&<Leaderboard users={users} betsMap={betsMap} results={results} matches={matches} scoring={scoring} currentUserId={session.id} onViewUser={setViewingUser}/>}
         {activeTab==='scoring'&&<ScoringScreen scoring={scoring}/>}
         {activeTab==='rules'&&<Rules/>}
         {activeTab==='bets'&&(
           <>
             <div style={{display:'flex',overflowX:'auto',gap:6,marginBottom:16,paddingBottom:4,scrollbarWidth:'none'}}>
-              {PHASES.map(p=>{const done=isClosed(p.deadline),open=isPhaseUnlocked(p.id,results);return<button key={p.id} onClick={()=>setActivePhase(p.id)} style={{whiteSpace:'nowrap',padding:'6px 14px',borderRadius:20,flexShrink:0,border:`1px solid ${activePhase===p.id?C.accent:C.border}`,background:activePhase===p.id?C.accent:'transparent',color:activePhase===p.id?'#fff':!open?C.textDim:done?C.textMuted:C.text,cursor:'pointer',fontSize:12,fontWeight:700,fontFamily:'inherit'}}>{p.icon} {p.short}{!open&&' 🔒'}</button>})}
+              {PHASES.map(p=>{
+                const done=isClosed(p.deadline),open=isPhaseUnlocked(p.id,results,matches)
+                return<button key={p.id} onClick={()=>setActivePhase(p.id)} style={{whiteSpace:'nowrap',padding:'6px 14px',borderRadius:20,flexShrink:0,border:`1px solid ${activePhase===p.id?C.accent:C.border}`,background:activePhase===p.id?C.accent:'transparent',color:activePhase===p.id?'#fff':!open?C.textDim:done?C.textMuted:C.text,cursor:'pointer',fontSize:12,fontWeight:700,fontFamily:'inherit'}}>{p.icon} {p.short}{!open&&' 🔒'}</button>
+              })}
             </div>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
               <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:22,color:C.text}}>{phase?.label}</div>
               <Tag color={closed?C.accent:C.greenSoft}>{timeLeft(phase?.deadline||'')}</Tag>
             </div>
-            {!unlocked&&<Card><div style={{color:C.textMuted,textAlign:'center',padding:24,fontSize:14}}>🔒 Esta fase se desbloqueará cuando el administrador introduzca todos los resultados de la fase anterior</div></Card>}
+            {!unlocked&&<Card><div style={{color:C.textMuted,textAlign:'center',padding:24,fontSize:14}}>🔒 Esta fase se desbloqueará cuando el administrador complete la fase anterior y publique los cruces</div></Card>}
             {unlocked&&activePhase==='groups'&&<GroupBets groupBets={userBets.groups||{}} onChange={(g,bet)=>handleSaveBet('groups',{...(userBets.groups||{}),[g]:bet})} disabled={closed} scoring={scoring}/>}
-            {unlocked&&['r32','r16','qf','sf'].includes(activePhase)&&<KnockoutBets phaseId={activePhase} phaseBets={userBets[activePhase]||{}} results={results} onChange={(mid,team)=>handleSaveBet(activePhase,{...(userBets[activePhase]||{}),[mid]:team})} disabled={closed} scoring={scoring}/>}
-            {unlocked&&activePhase==='third'&&<ThirdPlaceBet thirdBet={userBets.third||{}} results={results} onChange={bet=>handleSaveBet('third',bet)} disabled={closed} scoring={scoring}/>}
-            {unlocked&&activePhase==='final'&&<FinalBets finalBet={userBets.final||{}} results={results} onChange={bet=>handleSaveBet('final',bet)} disabled={closed} scoring={scoring}/>}
+            {unlocked&&['r32','r16','qf','sf'].includes(activePhase)&&<KnockoutBets phaseId={activePhase} phaseBets={userBets[activePhase]||{}} results={results} matches={matches} onChange={(mid,team)=>handleSaveBet(activePhase,{...(userBets[activePhase]||{}),[mid]:team})} disabled={closed} scoring={scoring}/>}
+            {unlocked&&activePhase==='third'&&<ThirdPlaceBet thirdBet={userBets.third||{}} results={results} matches={matches} onChange={(mid,team)=>handleSaveBet('third',{...(userBets.third||{}),[mid]:team})} disabled={closed} scoring={scoring}/>}
+            {unlocked&&activePhase==='final'&&<FinalBets finalBet={userBets.final||{}} results={results} matches={matches} onChange={(key,team)=>handleSaveBet('final',{...(userBets.final||{}),[key]:team})} disabled={closed} scoring={scoring}/>}
           </>
         )}
-        {activeTab==='admin'&&session.role==='admin'&&<AdminPanel results={results} scoring={scoring} users={users} onSave={handleSaveResults} onSaveScoring={handleSaveScoring} onApprove={handleApprove} onReject={handleReject} onLoadAll={loadAll}/>}
+        {activeTab==='admin'&&session.role==='admin'&&(
+          <AdminPanel results={results} matches={matches} scoring={scoring} users={users} onSave={handleSaveResults} onSaveMatches={handleSaveMatches} onSaveScoring={handleSaveScoring} onApprove={handleApprove} onReject={handleReject} onLoadAll={loadAll}/>
+        )}
       </main>
+
       <nav style={{position:'fixed',bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:'flex',justifyContent:'center',zIndex:100}}>
         {TABS.map(t=>(
           <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{flex:1,maxWidth:120,padding:'9px 0 11px',border:'none',background:activeTab===t.id?`${C.accent}1a`:'transparent',color:activeTab===t.id?C.accentHover:C.textMuted,cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:3,borderTop:`2px solid ${activeTab===t.id?C.accent:'transparent'}`,transition:'all .15s'}}>
