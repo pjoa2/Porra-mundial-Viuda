@@ -696,6 +696,58 @@ function AdminPanel({results,matches,scoring,users,onSave,onSaveMatches,onSaveSc
   const pending=users.filter(u=>u.status==='pending')
   const approved=users.filter(u=>u.role!=='admin'&&u.status==='approved')
 
+  // All teams that qualified from groups
+  function getGroupQualifiers(){
+    const teams=[]
+    Object.keys(GROUPS).forEach(g=>{
+      const r=local?.groups?.[g]||[]
+      if(r[0])teams.push(r[0])
+      if(r[1])teams.push(r[1])
+    })
+    // Also include all group teams as fallback
+    Object.values(GROUPS).forEach(gteams=>gteams.forEach(t=>{if(!teams.includes(t))teams.push(t)}))
+    return teams
+  }
+
+  // Teams available for a given phase (winners of previous phase)
+  function getAvailableTeams(phaseId){
+    if(phaseId==='r32') return getGroupQualifiers()
+    const prev={r16:'r32',qf:'r16',sf:'qf',third:'sf',final:'sf'}[phaseId]
+    if(!prev) return []
+    const prevMatches=localMatches[prev]||[]
+    const prevResults=local[prev]||{}
+    const winners=prevMatches.map(m=>prevResults[m.id]).filter(Boolean)
+    if(phaseId==='third'){
+      // Losers of SF
+      const sfWinners=winners
+      const sfAll=prevMatches.flatMap(m=>[m.t1,m.t2]).filter(Boolean)
+      return sfAll.filter(t=>!sfWinners.includes(t))
+    }
+    return winners.length>0?winners:prevMatches.flatMap(m=>[m.t1,m.t2]).filter(Boolean)
+  }
+
+  function ensureMatches(phaseId){
+    const count=PHASE_MATCH_COUNT[phaseId]||0
+    const existing=localMatches[phaseId]||[]
+    const ms=[...existing]
+    while(ms.length<count)ms.push({id:`m${ms.length*2}`,t1:'',t2:''})
+    return ms.slice(0,count)
+  }
+
+  function setMatchTeam(phaseId,matchId,field,val){
+    setLocalMatches(prev=>{
+      const ms=(prev[phaseId]||[]).map(m=>m.id===matchId?{...m,[field]:val}:m)
+      // Ensure all matches exist
+      const count=PHASE_MATCH_COUNT[phaseId]||0
+      while(ms.length<count)ms.push({id:`m${ms.length*2}`,t1:'',t2:''})
+      return{...prev,[phaseId]:ms.slice(0,count)}
+    })
+  }
+
+  function setMatchWinner(phaseId,matchId,winner){
+    setLocal(prev=>({...prev,[phaseId]:{...(prev[phaseId]||{}),[matchId]:winner}}))
+  }
+
   async function saveAll(){
     await onSave(local)
     await onSaveMatches(localMatches)
@@ -705,32 +757,6 @@ function AdminPanel({results,matches,scoring,users,onSave,onSaveMatches,onSaveSc
 
   const setGR=(g,pos,val)=>setLocal(r=>{const arr=[...(r?.groups?.[g]||['',''])];arr[pos]=val;return{...r,groups:{...(r.groups||{}),[g]:arr}}})
 
-  // Manage matches for a knockout phase
-  function getPhaseMatchCount(phaseId){return PHASE_MATCH_COUNT[phaseId]||0}
-
-  function ensureMatches(phaseId){
-    const count=getPhaseMatchCount(phaseId)
-    const existing=localMatches[phaseId]||[]
-    const ms=[...existing]
-    while(ms.length<count)ms.push({id:`m${ms.length*2}`,t1:'',t2:''})
-    return ms
-  }
-
-  function setMatchTeam(phaseId,matchId,field,val){
-    setLocalMatches(prev=>{
-      const ms=(prev[phaseId]||[]).map(m=>m.id===matchId?{...m,[field]:val}:m)
-      return{...prev,[phaseId]:ms}
-    })
-  }
-
-  function setMatchWinner(phaseId,matchId,winner){
-    setLocal(prev=>{
-      const phaseRes={...(prev[phaseId]||{}),[matchId]:winner}
-      return{...prev,[phaseId]:phaseRes}
-    })
-  }
-
-  // Simulation
   async function simPhase(phaseId){
     setSimulating(phaseId)
     let newMatches=generateSimMatches(phaseId,local,localMatches)
@@ -745,21 +771,10 @@ function AdminPanel({results,matches,scoring,users,onSave,onSaveMatches,onSaveSc
   async function simAll(){
     setSimulating('all')
     let r={},m={}
-    // Groups
     r=simulatePhaseResults('groups',r,m)
-    // Each knockout phase
     for(const pid of['r32','r16','qf','sf','third','final']){
       m=generateSimMatches(pid,r,m)
       r=simulatePhaseResults(pid,r,m)
-    }
-    // Final runner up
-    const finalMatch=(m.final||[])[0]
-    if(finalMatch){
-      const winner=r.final?.[finalMatch.id]
-      const runner=winner===finalMatch.t1?finalMatch.t2:finalMatch.t1
-      r.final[finalMatch.id+'_winner']=winner
-      r.final[finalMatch.id+'_runner']=runner
-      delete r.final[finalMatch.id]
     }
     setLocal(r);setLocalMatches(m)
     await onSaveMatches(m);await onSave(r)
@@ -767,6 +782,9 @@ function AdminPanel({results,matches,scoring,users,onSave,onSaveMatches,onSaveSc
   }
 
   const knockoutPhases=PHASES.filter(p=>p.id!=='groups')
+
+  // Check if groups are complete
+  const groupsComplete=Object.keys(GROUPS).every(g=>local?.groups?.[g]?.[0]&&local?.groups?.[g]?.[1])
 
   return(
     <div style={{display:'flex',flexDirection:'column',gap:16}}>
@@ -817,33 +835,58 @@ function AdminPanel({results,matches,scoring,users,onSave,onSaveMatches,onSaveSc
         </div>
       )}
 
-      {/* CRUCES - Admin introduces matchups manually */}
+      {/* CRUCES */}
       {activeSection==='matches'&&(
         <div style={{display:'flex',flexDirection:'column',gap:14}}>
           <div style={{background:`${C.blue}18`,border:`1px solid ${C.blue}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.textMuted}}>
-            Introduce los equipos que se enfrentan en cada partido. Una vez publicados, los participantes podrán hacer sus apuestas.
+            Selecciona los equipos que se enfrentan en cada partido. Una vez guardados, los participantes podrán apostar.
           </div>
 
-          {/* Phase selector */}
           <div style={{display:'flex',overflowX:'auto',gap:6,paddingBottom:4,scrollbarWidth:'none'}}>
             {knockoutPhases.map(p=><button key={p.id} onClick={()=>setActivePhase(p.id)} style={{whiteSpace:'nowrap',padding:'6px 14px',borderRadius:20,flexShrink:0,border:`1px solid ${activePhase===p.id?C.accent:C.border}`,background:activePhase===p.id?C.accent:'transparent',color:activePhase===p.id?'#fff':C.textMuted,cursor:'pointer',fontSize:12,fontWeight:700,fontFamily:'inherit'}}>{p.icon} {p.short}</button>)}
           </div>
 
           {knockoutPhases.filter(p=>p.id===activePhase).map(p=>{
             const ms=ensureMatches(p.id)
+            const availableTeams=getAvailableTeams(p.id)
+            const noTeams=availableTeams.length===0
+
             return(
               <div key={p.id} style={{display:'flex',flexDirection:'column',gap:10}}>
-                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:C.text}}>{p.label}</div>
-                {ms.map((m,idx)=>(
-                  <Card key={m.id} style={{padding:'13px 15px'}}>
-                    <div style={{fontSize:11,color:C.textMuted,marginBottom:10,letterSpacing:1}}>PARTIDO {idx+1}</div>
-                    <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                      <Input value={m.t1||''} onChange={e=>setMatchTeam(p.id,m.id,'t1',e.target.value)} placeholder="Equipo 1" style={{fontSize:13,padding:'8px 10px'}}/>
-                      <div style={{color:C.textMuted,fontWeight:800,flexShrink:0}}>vs</div>
-                      <Input value={m.t2||''} onChange={e=>setMatchTeam(p.id,m.id,'t2',e.target.value)} placeholder="Equipo 2" style={{fontSize:13,padding:'8px 10px'}}/>
-                    </div>
-                  </Card>
-                ))}
+                <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:C.text}}>{p.label} — {ms.length} partidos</div>
+                {noTeams&&p.id!=='r32'&&(
+                  <div style={{background:`${C.accent}18`,border:`1px solid ${C.accent}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.textMuted}}>
+                    ⚠ Completa y guarda los resultados de la fase anterior primero
+                  </div>
+                )}
+                {ms.map((m,idx)=>{
+                  // Get already selected teams in other matches of this phase to avoid duplicates
+                  const usedTeams=ms.filter(om=>om.id!==m.id).flatMap(om=>[om.t1,om.t2]).filter(Boolean)
+                  return(
+                    <Card key={m.id} style={{padding:'13px 15px'}}>
+                      <div style={{fontSize:11,color:C.textMuted,marginBottom:10,letterSpacing:1}}>PARTIDO {idx+1}</div>
+                      <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                        <select
+                          value={m.t1||''}
+                          onChange={e=>setMatchTeam(p.id,m.id,'t1',e.target.value)}
+                          style={{flex:1,background:C.surfaceHigh,border:`1px solid ${C.border}`,borderRadius:8,padding:'8px 10px',color:m.t1?C.text:C.textMuted,fontSize:13,fontFamily:'inherit'}}
+                        >
+                          <option value=''>— Equipo 1 —</option>
+                          {availableTeams.map(t=><option key={t} value={t} disabled={usedTeams.includes(t)||t===m.t2}>{t}</option>)}
+                        </select>
+                        <div style={{color:C.textMuted,fontWeight:800,flexShrink:0,fontSize:12}}>vs</div>
+                        <select
+                          value={m.t2||''}
+                          onChange={e=>setMatchTeam(p.id,m.id,'t2',e.target.value)}
+                          style={{flex:1,background:C.surfaceHigh,border:`1px solid ${C.border}`,borderRadius:8,padding:'8px 10px',color:m.t2?C.text:C.textMuted,fontSize:13,fontFamily:'inherit'}}
+                        >
+                          <option value=''>— Equipo 2 —</option>
+                          {availableTeams.map(t=><option key={t} value={t} disabled={usedTeams.includes(t)||t===m.t1}>{t}</option>)}
+                        </select>
+                      </div>
+                    </Card>
+                  )
+                })}
               </div>
             )
           })}
@@ -857,7 +900,6 @@ function AdminPanel({results,matches,scoring,users,onSave,onSaveMatches,onSaveSc
         <div style={{display:'flex',flexDirection:'column',gap:14}}>
           <div style={{background:`${C.accent}18`,border:`1px solid ${C.accent}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.silver}}>Introduce el ganador de cada partido una vez disputado.</div>
 
-          {/* Groups */}
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:C.text}}>⚽ Fase de Grupos</div>
           <div style={{display:'flex',flexDirection:'column',gap:10}}>
             {Object.entries(GROUPS).map(([g,teams])=>{
@@ -879,31 +921,31 @@ function AdminPanel({results,matches,scoring,users,onSave,onSaveMatches,onSaveSc
             })}
           </div>
 
-          {/* Knockout results */}
           {knockoutPhases.map(p=>{
             const phaseMatches=localMatches[p.id]||[]
-            if(phaseMatches.filter(m=>m.t1&&m.t2).length===0)return null
+            const validMatches=phaseMatches.filter(m=>m.t1&&m.t2)
+            if(validMatches.length===0)return null
             return(
               <div key={p.id} style={{display:'flex',flexDirection:'column',gap:10}}>
                 <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:C.text}}>{p.icon} {p.label}</div>
-                {phaseMatches.filter(m=>m.t1&&m.t2).map((m,idx)=>{
-                  const winner=local[p.id]?.[m.id]
-                  const winnerKey=p.id==='final'?m.id+'_winner':m.id
-                  const runnerKey=m.id+'_runner'
-                  const currentWinner=p.id==='final'?local[p.id]?.[winnerKey]:winner
+                {validMatches.map((m,idx)=>{
+                  const currentWinner=p.id==='final'?local.final?.[m.id+'_winner']:local[p.id]?.[m.id]
                   return(
                     <Card key={m.id} style={{padding:'12px 15px'}}>
                       <div style={{fontSize:11,color:C.textMuted,marginBottom:8,letterSpacing:1}}>PARTIDO {idx+1}</div>
                       {p.id==='final'?(
                         <div style={{display:'flex',flexDirection:'column',gap:8}}>
-                          <div style={{fontSize:12,color:C.textMuted}}>🏆 Campeón</div>
+                          <div style={{fontSize:12,color:C.textMuted,marginBottom:4}}>🏆 Selecciona el campeón (el otro será subcampeón)</div>
                           <div style={{display:'flex',gap:6}}>
-                            {[m.t1,m.t2].map(team=><button key={team} onClick={()=>{setMatchWinner('final',winnerKey,team);setMatchWinner('final',runnerKey,team===m.t1?m.t2:m.t1)}} style={{flex:1,padding:'8px 6px',borderRadius:8,border:`2px solid ${local.final?.[winnerKey]===team?C.gold:C.border}`,background:local.final?.[winnerKey]===team?`${C.gold}22`:C.surfaceHigh,color:local.final?.[winnerKey]===team?C.gold:C.text,fontWeight:700,fontSize:13,fontFamily:'inherit',cursor:'pointer',textAlign:'center'}}>{local.final?.[winnerKey]===team&&'✓ '}{team}</button>)}
+                            {[m.t1,m.t2].map(team=><button key={team} onClick={()=>{setMatchWinner('final',m.id+'_winner',team);setMatchWinner('final',m.id+'_runner',team===m.t1?m.t2:m.t1)}} style={{flex:1,padding:'10px 6px',borderRadius:8,border:`2px solid ${local.final?.[m.id+'_winner']===team?C.gold:C.border}`,background:local.final?.[m.id+'_winner']===team?`${C.gold}22`:C.surfaceHigh,color:local.final?.[m.id+'_winner']===team?C.gold:C.text,fontWeight:700,fontSize:13,fontFamily:'inherit',cursor:'pointer',textAlign:'center',wordBreak:'break-word'}}>{local.final?.[m.id+'_winner']===team&&'🏆 '}{team}</button>)}
                           </div>
                         </div>
                       ):(
-                        <div style={{display:'flex',gap:6}}>
-                          {[m.t1,m.t2].filter(Boolean).map(team=><button key={team} onClick={()=>setMatchWinner(p.id,m.id,team)} style={{flex:1,padding:'8px 6px',borderRadius:8,border:`2px solid ${local[p.id]?.[m.id]===team?C.green:C.border}`,background:local[p.id]?.[m.id]===team?`${C.green}22`:C.surfaceHigh,color:local[p.id]?.[m.id]===team?C.greenSoft:C.text,fontWeight:700,fontSize:13,fontFamily:'inherit',cursor:'pointer',textAlign:'center'}}>{local[p.id]?.[m.id]===team&&'✓ '}{team}</button>)}
+                        <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                          <div style={{fontSize:12,color:C.textMuted}}>{m.t1} vs {m.t2}</div>
+                          <div style={{display:'flex',gap:6}}>
+                            {[m.t1,m.t2].map(team=><button key={team} onClick={()=>setMatchWinner(p.id,m.id,team)} style={{flex:1,padding:'10px 6px',borderRadius:8,border:`2px solid ${local[p.id]?.[m.id]===team?C.green:C.border}`,background:local[p.id]?.[m.id]===team?`${C.green}22`:C.surfaceHigh,color:local[p.id]?.[m.id]===team?C.greenSoft:C.text,fontWeight:700,fontSize:13,fontFamily:'inherit',cursor:'pointer',textAlign:'center',wordBreak:'break-word'}}>{local[p.id]?.[m.id]===team&&'✓ '}{team}</button>)}
+                          </div>
                         </div>
                       )}
                     </Card>
@@ -959,7 +1001,6 @@ function AdminPanel({results,matches,scoring,users,onSave,onSaveMatches,onSaveSc
     </div>
   )
 }
-
 // ── MAIN APP ──────────────────────────────────────────────────────────────────
 export default function App(){
   const[session,setSession]=useState(null)
