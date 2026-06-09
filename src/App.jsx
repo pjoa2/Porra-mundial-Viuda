@@ -686,6 +686,16 @@ export default function App(){
 
   function handleLogout(){localStorage.removeItem('porra_user');setSession(null)}
 
+  function handleShare(){
+    const url=window.location.href
+    const text='¡Únete a la Porra Mundial 2026 de La Viuda! Haz tus predicciones aquí:'
+    if(navigator.share){
+      navigator.share({title:'Porra Mundial 2026',text,url}).catch(()=>{})
+    } else {
+      navigator.clipboard.writeText(url).then(()=>notify('✓ URL copiada al portapapeles')).catch(()=>notify('URL: '+url))
+    }
+  }
+
   if(!loaded)return(
     <div style={{minHeight:'100vh',background:C.bg,display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:14}}>
       <div style={{fontSize:28}}>⚽</div>
@@ -728,6 +738,7 @@ export default function App(){
             <div style={{fontSize:13,color:C.text,fontWeight:700,lineHeight:1}}>{session.display_name||session.name}</div>
             {session.display_name&&<div style={{fontSize:10,color:C.textDim,lineHeight:1.3}}>@{session.name}</div>}
           </button>
+          <Btn onClick={handleShare} variant='ghost' small>🔗 Compartir</Btn>
           <Btn onClick={handleLogout} variant='ghost' small>Salir</Btn>
         </div>
       </header>
