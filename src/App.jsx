@@ -23,7 +23,6 @@ const SCORING_LABELS = [
   {key:'sf',             label:'Semis — Acierto',          icon:'🔴'},
   {key:'third',          label:'3º/4º — Ganador',          icon:'🥉'},
   {key:'final_winner',   label:'Final — Campeón',          icon:'🏆'},
-  {key:'final_runner',   label:'Final — Subcampeón',       icon:'🥈'},
 ]
 
 const GROUPS = {
@@ -170,8 +169,7 @@ function calcScore(userBets,results,matches,scoring){
     const fm=(matches?.final||[])[0]
     if(fm){
       let pts=0
-      if(userBets.final[fm.id+'_winner']&&results.final[fm.id+'_winner']&&userBets.final[fm.id+'_winner']===results.final[fm.id+'_winner'])pts+=S.final_winner
-      if(userBets.final[fm.id+'_runner']&&results.final[fm.id+'_runner']&&userBets.final[fm.id+'_runner']===results.final[fm.id+'_runner'])pts+=S.final_runner
+     if(userBets.final[fm.id+'_winner']&&results.final[fm.id+'_winner']&&userBets.final[fm.id+'_winner']===results.final[fm.id+'_winner'])pts+=S.final_winner
       if(pts>0){total+=pts;breakdown.push({label:'Final',pts})}
     }
   }
@@ -456,7 +454,7 @@ function ScoringScreen({scoring}){
         {phase:'Cuartos',icon:'🟠',items:[{label:'Acertar clasificado',pts:S.qf,color:C.accentHover}]},
         {phase:'Semis',icon:'🔴',items:[{label:'Acertar clasificado',pts:S.sf,color:C.accent}]},
         {phase:'3º/4º',icon:'🥉',items:[{label:'Acertar ganador',pts:S.third,color:C.silver}]},
-        {phase:'Final',icon:'🏆',items:[{label:'Campeón',pts:S.final_winner,color:C.gold},{label:'Subcampeón',pts:S.final_runner,color:C.silver}]},
+        {phase:'Final',icon:'🏆',items:[{label:'Campeón',pts:S.final_winner,color:C.gold}]},,
       ].map((s,i)=>(
         <Card key={i} style={{padding:'14px 16px'}}>
           <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}><span style={{fontSize:20}}>{s.icon}</span><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:C.text}}>{s.phase}</div></div>
