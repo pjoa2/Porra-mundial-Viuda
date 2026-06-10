@@ -698,21 +698,33 @@ function AdminPanel({results,matches,scoring,phases,users,onSave,onSaveMatches,o
   async function savePhases(){await onSavePhases(localPhases);setSaved(true);setTimeout(()=>setSaved(false),2000)}
   const setGR=(g,pos,val)=>setLocal(r=>{const arr=[...(r?.groups?.[g]||['',''])];arr[pos]=val;return{...r,groups:{...(r.groups||{}),[g]:arr}}})
 
-  async function simPhase(phaseId){
-    setSimulating(phaseId)
-    let nm=generateSimMatches(phaseId,local,localMatches)
+ async function simPhase(phaseId){
+  setSimulating(phaseId)
+  let nm={...localMatches}
+  if(phaseId!=='groups'){
+    nm=generateSimMatches(phaseId,local,localMatches)
     setLocalMatches(nm)
-    const nr=simulatePhaseResults(phaseId,local,nm)
-    setLocal(nr);await onSaveMatches(nm);await onSave(nr)
-    setSimulating(null);setSaved(true);setTimeout(()=>setSaved(false),2000)
+    await onSaveMatches(nm)
   }
+  const nr=simulatePhaseResults(phaseId,local,nm)
+  setLocal(nr)
+  await onSave(nr)
+  setSimulating(null);setSaved(true);setTimeout(()=>setSaved(false),2000)
+}
   async function simAll(){
-    setSimulating('all');let r={},m={}
-    r=simulatePhaseResults('groups',r,m)
-    for(const pid of['r32','r16','qf','sf','third','final']){m=generateSimMatches(pid,r,m);r=simulatePhaseResults(pid,r,m)}
-    setLocal(r);setLocalMatches(m);await onSaveMatches(m);await onSave(r)
-    setSimulating(null);setSaved(true);setTimeout(()=>setSaved(false),2000)
+  setSimulating('all');let r={},m={}
+  // Groups: results go to porra_results, matches structure for knockouts
+  r=simulatePhaseResults('groups',r,m)
+  // Each knockout: generate match pairs first, then simulate results separately
+  for(const pid of['r32','r16','qf','sf','third','final']){
+    m=generateSimMatches(pid,r,m)
+    r=simulatePhaseResults(pid,r,m)
   }
+  setLocal(r);setLocalMatches(m)
+  await onSaveMatches(m)
+  await onSave(r)
+  setSimulating(null);setSaved(true);setTimeout(()=>setSaved(false),2000)
+}
 
   const knockoutPhases=DEFAULT_PHASES.filter(p=>p.id!=='groups')
 
