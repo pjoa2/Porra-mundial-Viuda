@@ -53,10 +53,7 @@ const DEFAULT_PHASES = [
   {id:'final',label:'Final',short:'Final',icon:'🏆',start:'2026-07-19T21:00:00'},
 ]
 
-// Deadline = 1h before start
-function getDeadline(start){
-  const d=new Date(start);d.setHours(d.getHours()-1);return d.toISOString()
-}
+function getDeadline(start){const d=new Date(start);d.setHours(d.getHours()-1);return d.toISOString()}
 function isClosed(start){return new Date()>new Date(getDeadline(start))}
 function timeLeft(start){
   const diff=new Date(getDeadline(start))-new Date()
@@ -68,11 +65,9 @@ function timeLeft(start){
 }
 function formatDatetimeLocal(iso){
   if(!iso)return''
-  const d=new Date(iso)
-  const pad=n=>String(n).padStart(2,'0')
+  const d=new Date(iso),pad=n=>String(n).padStart(2,'0')
   return`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
-
 function hashPassword(str){
   let hash=5381
   for(let i=0;i<str.length;i++)hash=((hash<<5)+hash)^str.charCodeAt(i)
@@ -101,13 +96,14 @@ function isPhaseUnlocked(phaseId,results,matches){
   if(phaseId==='groups')return true
   const prev={r32:'groups',r16:'r32',qf:'r16',sf:'qf',third:'sf',final:'sf'}[phaseId]
   if(!isPhaseComplete(prev,results,matches))return false
-  if(phaseId==='third'){return getSFLosers(results,matches).length>=2}
+  if(phaseId==='third')return getSFLosers(results,matches).length>=2
   if(phaseId==='final'){const sfMatches=matches?.sf||[];const sfResults=results?.sf||{};return sfMatches.length>0&&sfMatches.every(m=>sfResults[m.id])}
-  return(matches?.[phaseId]||[]).length>0
+  const phaseMatches=matches?.[phaseId]||[]
+  return phaseMatches.filter(m=>m.t1&&m.t2).length>0
 }
 
 function generateSimMatches(phaseId,results,matches){
-  const newMatches={...matches}
+  const newMatches=JSON.parse(JSON.stringify(matches||{}))
   if(phaseId==='r32'){
     const teams=[]
     Object.keys(GROUPS).forEach(g=>{teams.push(results?.groups?.[g]?.[0]||`1º G${g}`);teams.push(results?.groups?.[g]?.[1]||`2º G${g}`)})
@@ -263,11 +259,11 @@ function KnockoutBets({phaseId,phaseBets,results,matches,onChange,disabled,scori
   const phaseMatches=matches?.[phaseId]||[]
   const pts=S[phaseId]||0
   function handleChange(matchId,team){setLocal(prev=>({...prev,[matchId]:team}));onChange(matchId,team)}
-  if(phaseMatches.length===0)return<Card><div style={{color:C.textMuted,textAlign:'center',padding:24,fontSize:14}}>⏳ El administrador aún no ha publicado los cruces de esta fase</div></Card>
+  if(phaseMatches.filter(m=>m.t1&&m.t2).length===0)return<Card><div style={{color:C.textMuted,textAlign:'center',padding:24,fontSize:14}}>⏳ El administrador aún no ha publicado los cruces de esta fase</div></Card>
   return(
     <div style={{display:'flex',flexDirection:'column',gap:12}}>
       <div style={{background:`${C.blue}18`,border:`1px solid ${C.blue}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.silver}}>✅ Acierto por partido: <b style={{color:'#5bb3f5'}}>+{pts} pts</b></div>
-      {phaseMatches.map((m,idx)=>{
+      {phaseMatches.filter(m=>m.t1&&m.t2).map((m,idx)=>{
         const bet=local[m.id]
         return(
           <Card key={m.id} style={{padding:'13px 15px'}}>
@@ -286,7 +282,7 @@ function ThirdPlaceBet({thirdBet,results,matches,onChange,disabled,scoring}){
   const S={...DEFAULT_SCORING,...scoring}
   const[local,setLocal]=useState(thirdBet||{})
   useEffect(()=>setLocal(thirdBet||{}),[thirdBet])
-  const thirdMatch=(matches?.third||[])[0]
+  const thirdMatch=(matches?.third||[]).filter(m=>m.t1&&m.t2)[0]
   function handleChange(matchId,team){setLocal(prev=>({...prev,[matchId]:team}));onChange(matchId,team)}
   return(
     <div style={{display:'flex',flexDirection:'column',gap:14}}>
@@ -307,7 +303,7 @@ function FinalBets({finalBet,results,matches,onChange,disabled,scoring}){
   const S={...DEFAULT_SCORING,...scoring}
   const[local,setLocal]=useState(finalBet||{})
   useEffect(()=>setLocal(finalBet||{}),[finalBet])
-  const finalMatch=(matches?.final||[])[0]
+  const finalMatch=(matches?.final||[]).filter(m=>m.t1&&m.t2)[0]
   function handleChange(key,team){setLocal(prev=>({...prev,[key]:team}));onChange(key,team)}
   return(
     <div style={{display:'flex',flexDirection:'column',gap:14}}>
@@ -332,7 +328,6 @@ function UserBetsViewer({user,bets,results,matches,scoring,phases,onBack}){
   const[activePhase,setActivePhase]=useState('groups')
   const S={...DEFAULT_SCORING,...scoring}
   const visiblePhases=(phases||DEFAULT_PHASES).filter(p=>isPhaseVisible(p.id,results,matches,phases))
-
   function GroupsView(){
     const gb=bets?.groups||{}
     return(
@@ -362,7 +357,7 @@ function UserBetsViewer({user,bets,results,matches,scoring,phases,onBack}){
   }
   function KnockoutView({phaseId}){
     const pb=bets?.[phaseId]||{},ppts=S[phaseId]||0
-    const phaseMatches=matches?.[phaseId]||[]
+    const phaseMatches=(matches?.[phaseId]||[]).filter(m=>m.t1&&m.t2)
     if(phaseMatches.length===0)return<Card><div style={{color:C.textMuted,textAlign:'center',padding:20,fontSize:13}}>Sin cruces disponibles</div></Card>
     return(
       <div style={{display:'flex',flexDirection:'column',gap:10}}>
@@ -384,7 +379,8 @@ function UserBetsViewer({user,bets,results,matches,scoring,phases,onBack}){
     )
   }
   function ThirdView(){
-    const tm=(matches?.third||[])[0];if(!tm)return<Card><div style={{color:C.textMuted,textAlign:'center',padding:20}}>Sin partido</div></Card>
+    const tm=(matches?.third||[]).filter(m=>m.t1&&m.t2)[0]
+    if(!tm)return<Card><div style={{color:C.textMuted,textAlign:'center',padding:20}}>Sin partido</div></Card>
     const bet=bets?.third?.[tm.id],real=results?.third?.[tm.id],correct=bet&&real&&bet===real
     return(
       <Card style={{padding:'13px 15px'}}>
@@ -399,7 +395,8 @@ function UserBetsViewer({user,bets,results,matches,scoring,phases,onBack}){
     )
   }
   function FinalView(){
-    const fm=(matches?.final||[])[0];if(!fm)return<Card><div style={{color:C.textMuted,textAlign:'center',padding:20}}>Sin partido</div></Card>
+    const fm=(matches?.final||[]).filter(m=>m.t1&&m.t2)[0]
+    if(!fm)return<Card><div style={{color:C.textMuted,textAlign:'center',padding:20}}>Sin partido</div></Card>
     const fb=bets?.final||{}
     return(
       <div style={{display:'flex',flexDirection:'column',gap:10}}>
@@ -478,7 +475,7 @@ function Rules({phases}){
       {[
         {icon:'📋',title:'¿En qué consiste?',text:'Cada participante hace sus predicciones antes de que empiece cada fase. Cuantos más aciertos, más puntos. Al final del torneo gana quien más puntos haya acumulado.'},
         {icon:'⏳',title:'Plazos',text:'Las apuestas se cierran automáticamente 1 hora antes del inicio de cada fase. Una vez cerrada, no se pueden modificar las predicciones.'},
-        {icon:'🔓',title:'Desbloqueo de fases',text:'Cada fase eliminatoria se desbloquea cuando el administrador completa la fase anterior y publica los cruces. Los cruces los introduce manualmente el admin según el sorteo oficial de la FIFA.'},
+        {icon:'🔓',title:'Desbloqueo de fases',text:'Cada fase eliminatoria se desbloquea cuando el administrador completa la fase anterior y publica los cruces.'},
         {icon:'👁',title:'Ver apuestas de otros',text:'Las apuestas se pueden ver cuando la fase ha comenzado o el administrador ha introducido todos sus resultados.'},
         {icon:'✅',title:'Acceso',text:'El registro está sujeto a aprobación del administrador.'},
         {icon:'📈',title:'Puntuación progresiva',text:'Cada fase vale más puntos que la anterior. La Final tiene tanto peso que cualquiera puede remontar hasta el último momento.'},
@@ -545,7 +542,7 @@ function ProfileScreen({session,onUpdate,onDelete,onBack}){
         <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:C.accent,marginBottom:10}}>⚠ Zona peligrosa</div>
         {!confirmDelete?<Btn onClick={()=>setConfirmDelete(true)} variant='danger' full>🗑 Eliminar mi cuenta</Btn>:(
           <div style={{display:'flex',flexDirection:'column',gap:10}}>
-            <div style={{fontSize:13,color:C.textMuted,textAlign:'center'}}>¿Seguro? Se borrarán tu cuenta y todas tus apuestas. Esta acción no se puede deshacer.</div>
+            <div style={{fontSize:13,color:C.textMuted,textAlign:'center'}}>¿Seguro? Se borrarán tu cuenta y todas tus apuestas.</div>
             <div style={{display:'flex',gap:8}}><Btn onClick={()=>setConfirmDelete(false)} variant='ghost' full>Cancelar</Btn><Btn onClick={deleteAccount} variant='danger' full disabled={loading}>Sí, eliminar</Btn></div>
           </div>
         )}
@@ -644,7 +641,7 @@ function Leaderboard({users,betsMap,results,matches,scoring,phases,currentUserId
   )
 }
 
-function AdminPanel({results,matches,scoring,phases,users,onSave,onSaveMatches,onSaveScoring,onSavePhases,onApprove,onReject}){
+function AdminPanel({results,matches,scoring,phases,users,onSave,onSaveMatches,onSaveScoring,onSavePhases,onApprove,onReject,onLoadAll}){
   const[local,setLocal]=useState(JSON.parse(JSON.stringify(results||{})))
   const[localMatches,setLocalMatches]=useState(JSON.parse(JSON.stringify(matches||{})))
   const[localScoring,setLocalScoring]=useState({...DEFAULT_SCORING,...scoring})
@@ -653,6 +650,8 @@ function AdminPanel({results,matches,scoring,phases,users,onSave,onSaveMatches,o
   const[activePhase,setActivePhase]=useState('r32')
   const[saved,setSaved]=useState(false)
   const[simulating,setSimulating]=useState(null)
+  const[confirmReset,setConfirmReset]=useState(false)
+  const[resetting,setResetting]=useState(false)
 
   useEffect(()=>setLocal(JSON.parse(JSON.stringify(results||{}))),[results])
   useEffect(()=>setLocalMatches(JSON.parse(JSON.stringify(matches||{}))),[matches])
@@ -693,38 +692,56 @@ function AdminPanel({results,matches,scoring,phases,users,onSave,onSaveMatches,o
   function setMatchWinner(phaseId,matchId,winner){
     setLocal(prev=>({...prev,[phaseId]:{...(prev[phaseId]||{}),[matchId]:winner}}))
   }
-  async function saveAll(){await onSave(local);await onSaveMatches(localMatches);setSaved(true);setTimeout(()=>setSaved(false),2000)}
+
+  async function saveAll(){
+    await onSave(local)
+    const entries=Object.entries(localMatches)
+    if(entries.length>0)await onSaveMatches(localMatches)
+    setSaved(true);setTimeout(()=>setSaved(false),2000)
+  }
   async function saveScoring(){await onSaveScoring(localScoring);setSaved(true);setTimeout(()=>setSaved(false),2000)}
   async function savePhases(){await onSavePhases(localPhases);setSaved(true);setTimeout(()=>setSaved(false),2000)}
+
   const setGR=(g,pos,val)=>setLocal(r=>{const arr=[...(r?.groups?.[g]||['',''])];arr[pos]=val;return{...r,groups:{...(r.groups||{}),[g]:arr}}})
 
- async function simPhase(phaseId){
-  setSimulating(phaseId)
-  let nm={...localMatches}
-  if(phaseId!=='groups'){
-    nm=generateSimMatches(phaseId,local,localMatches)
-    setLocalMatches(nm)
-    await onSaveMatches(nm)
+  async function simPhase(phaseId){
+    setSimulating(phaseId)
+    let nm={...localMatches}
+    if(phaseId!=='groups'){
+      nm=generateSimMatches(phaseId,local,localMatches)
+      setLocalMatches(nm)
+      await onSaveMatches(nm)
+    }
+    const nr=simulatePhaseResults(phaseId,local,nm)
+    setLocal(nr);await onSave(nr)
+    setSimulating(null);setSaved(true);setTimeout(()=>setSaved(false),2000)
   }
-  const nr=simulatePhaseResults(phaseId,local,nm)
-  setLocal(nr)
-  await onSave(nr)
-  setSimulating(null);setSaved(true);setTimeout(()=>setSaved(false),2000)
-}
+
   async function simAll(){
-  setSimulating('all');let r={},m={}
-  // Groups: results go to porra_results, matches structure for knockouts
-  r=simulatePhaseResults('groups',r,m)
-  // Each knockout: generate match pairs first, then simulate results separately
-  for(const pid of['r32','r16','qf','sf','third','final']){
-    m=generateSimMatches(pid,r,m)
-    r=simulatePhaseResults(pid,r,m)
+    setSimulating('all');let r={},m={}
+    r=simulatePhaseResults('groups',r,m)
+    for(const pid of['r32','r16','qf','sf','third','final']){m=generateSimMatches(pid,r,m);r=simulatePhaseResults(pid,r,m)}
+    setLocal(r);setLocalMatches(m)
+    await onSaveMatches(m);await onSave(r)
+    setSimulating(null);setSaved(true);setTimeout(()=>setSaved(false),2000)
   }
-  setLocal(r);setLocalMatches(m)
-  await onSaveMatches(m)
-  await onSave(r)
-  setSimulating(null);setSaved(true);setTimeout(()=>setSaved(false),2000)
-}
+
+  async function resetTournament(){
+    setResetting(true)
+    // Delete all results
+    await supabase.from('porra_results').delete().neq('phase','__none__')
+    // Delete all matches
+    await supabase.from('porra_matches').delete().neq('key','__none__')
+    // Delete only knockout bets (keep groups bets)
+    const{data:allBets}=await supabase.from('porra_bets').select('id,phase')
+    const knockoutBets=(allBets||[]).filter(b=>b.phase!=='groups')
+    for(const b of knockoutBets){
+      await supabase.from('porra_bets').delete().eq('id',b.id)
+    }
+    setLocal({});setLocalMatches({})
+    setConfirmReset(false);setResetting(false)
+    await onLoadAll()
+  }
 
   const knockoutPhases=DEFAULT_PHASES.filter(p=>p.id!=='groups')
 
@@ -771,6 +788,28 @@ function AdminPanel({results,matches,scoring,phases,users,onSave,onSaveMatches,o
               <Tag color={C.greenSoft}>Aprobado</Tag>
             </div>
           ))}
+
+          {/* RESET CAMPEONATO */}
+          <div style={{height:1,background:C.border,margin:'8px 0'}}/>
+          <Card style={{borderColor:`${C.accent}44`}}>
+            <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:C.accent,marginBottom:8}}>🔄 Reset del campeonato</div>
+            <div style={{fontSize:12,color:C.textMuted,lineHeight:1.6,marginBottom:14}}>
+              Borra todos los resultados y cruces de eliminatorias. Las apuestas de <b style={{color:C.text}}>grupos se conservan</b>, pero las de fases eliminatorias se eliminan. El torneo vuelve al estado inicial.
+            </div>
+            {!confirmReset?(
+              <Btn onClick={()=>setConfirmReset(true)} variant='danger' full>🔄 Resetear campeonato</Btn>
+            ):(
+              <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                <div style={{fontSize:13,color:C.accentHover,textAlign:'center',fontWeight:700,background:`${C.accent}18`,borderRadius:8,padding:'10px 12px'}}>
+                  ⚠ ¿Seguro? Se borrarán todos los resultados y las apuestas eliminatorias de todos los usuarios. Esta acción no se puede deshacer.
+                </div>
+                <div style={{display:'flex',gap:8}}>
+                  <Btn onClick={()=>setConfirmReset(false)} variant='ghost' full disabled={resetting}>Cancelar</Btn>
+                  <Btn onClick={resetTournament} variant='danger' full disabled={resetting}>{resetting?'Reseteando…':'Sí, resetear'}</Btn>
+                </div>
+              </div>
+            )}
+          </Card>
         </div>
       )}
 
@@ -872,9 +911,7 @@ function AdminPanel({results,matches,scoring,phases,users,onSave,onSaveMatches,o
       {/* FECHAS */}
       {activeSection==='dates'&&(
         <div style={{display:'flex',flexDirection:'column',gap:14}}>
-          <div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.textMuted}}>
-            Introduce la fecha y hora de inicio de cada fase. Las apuestas se cerrarán automáticamente <b style={{color:C.gold}}>1 hora antes</b>.
-          </div>
+          <div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.textMuted}}>Las apuestas se cierran <b style={{color:C.gold}}>1 hora antes</b> del inicio de cada fase.</div>
           <div style={{display:'flex',flexDirection:'column',gap:10}}>
             {localPhases.map((p,i)=>(
               <Card key={p.id} style={{padding:'13px 15px'}}>
@@ -883,20 +920,8 @@ function AdminPanel({results,matches,scoring,phases,users,onSave,onSaveMatches,o
                   <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:C.text}}>{p.label}</div>
                 </div>
                 <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                  <div style={{fontSize:11,color:C.textMuted,letterSpacing:1,textTransform:'uppercase'}}>Fecha y hora de inicio</div>
-                  <input
-                    type="datetime-local"
-                    value={formatDatetimeLocal(p.start)}
-                    onChange={e=>{
-                      const newPhases=[...localPhases]
-                      newPhases[i]={...p,start:new Date(e.target.value).toISOString()}
-                      setLocalPhases(newPhases)
-                    }}
-                    style={{...inp,fontSize:14,padding:'8px 12px',colorScheme:'dark'}}
-                  />
-                  <div style={{fontSize:11,color:C.textDim}}>
-                    Cierre de apuestas: <b style={{color:isClosed(p.start)?C.accent:C.greenSoft}}>{timeLeft(p.start)}</b>
-                  </div>
+                  <input type="datetime-local" value={formatDatetimeLocal(p.start)} onChange={e=>{const np=[...localPhases];np[i]={...p,start:new Date(e.target.value).toISOString()};setLocalPhases(np)}} style={{...inp,fontSize:14,padding:'8px 12px',colorScheme:'dark'}}/>
+                  <div style={{fontSize:11,color:C.textDim}}>Cierre: <b style={{color:isClosed(p.start)?C.accent:C.greenSoft}}>{timeLeft(p.start)}</b></div>
                 </div>
               </Card>
             ))}
@@ -1022,8 +1047,14 @@ export default function App(){
   }
   async function handleSaveMatches(newMatches){
     setMatches(newMatches)
-    for(const[key,value]of Object.entries(newMatches)){await supabase.from('porra_matches').upsert({key,value,updated_at:new Date().toISOString()},{onConflict:'key'})}
-    notify('✓ Cruces guardados')
+    const entries=Object.entries(newMatches)
+    if(entries.length===0){notify('⚠ Sin cruces que guardar');return}
+    for(const[key,value]of entries){
+      if(!value||value.length===0)continue
+      const{error}=await supabase.from('porra_matches').upsert({key,value,updated_at:new Date().toISOString()},{onConflict:'key'})
+      if(error){notify('❌ Error: '+error.message);console.error(key,error);return}
+    }
+    notify('✓ Cruces guardados ('+entries.length+')')
   }
   async function handleSaveScoring(newScoring){
     setScoring(newScoring)
@@ -1128,7 +1159,7 @@ export default function App(){
           </>
         )}
         {activeTab==='admin'&&session.role==='admin'&&(
-          <AdminPanel results={results} matches={matches} scoring={scoring} phases={phases} users={users} onSave={handleSaveResults} onSaveMatches={handleSaveMatches} onSaveScoring={handleSaveScoring} onSavePhases={handleSavePhases} onApprove={handleApprove} onReject={handleReject}/>
+          <AdminPanel results={results} matches={matches} scoring={scoring} phases={phases} users={users} onSave={handleSaveResults} onSaveMatches={handleSaveMatches} onSaveScoring={handleSaveScoring} onSavePhases={handleSavePhases} onApprove={handleApprove} onReject={handleReject} onLoadAll={loadAll}/>
         )}
       </main>
 
