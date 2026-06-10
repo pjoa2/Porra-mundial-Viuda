@@ -570,8 +570,8 @@ function LoginScreen({onLogin}){
     if(!realName.trim()){setErr('Escribe tu nombre real');setLoading(false);return}
     if(pass.length<4){setErr('Mínimo 4 caracteres');setLoading(false);return}
     if(pass!==pass2){setErr('Las contraseñas no coinciden');setLoading(false);return}
-    const{data:existing}=await supabase.from('porra_users').select('id').ilike('name',name.trim()).single()
-    if(existing){setErr('Ese nombre ya está en uso');setLoading(false);return}
+   const{data:existingList}=await supabase.from('porra_users').select('id').ilike('name',name.trim())
+if(existingList&&existingList.length>0){setErr('Ese nombre ya está en uso');setLoading(false);return}
     const{data,error}=await supabase.from('porra_users').insert({name:name.trim(),password_hash:hashPassword(pass),role:'user',status:'pending',display_name:realName.trim()}).select().single()
     if(error){setErr('Error al crear cuenta');setLoading(false);return}
     localStorage.setItem('porra_user',JSON.stringify(data));onLogin(data);setLoading(false)
