@@ -89,8 +89,8 @@ function isPhaseComplete(phaseId,results,matches){
 }
 function isPhaseVisible(phaseId,results,matches,phases){
   const p=(phases||DEFAULT_PHASES).find(ph=>ph.id===phaseId)
-  if(p&&isClosed(p.start))return true
-  return isPhaseComplete(phaseId,results,matches)
+  if(!p)return false
+  return isClosed(p.start)
 }
 function isPhaseUnlocked(phaseId,results,matches){
   if(phaseId==='groups')return true
