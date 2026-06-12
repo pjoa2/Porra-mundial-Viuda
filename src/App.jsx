@@ -785,11 +785,14 @@ function AdminPanel({results,matches,scoring,phases,users,onSave,onSaveMatches,o
           )}
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:C.textMuted}}>✅ Aprobados ({approved.length})</div>
           {approved.map(u=>(
-            <div key={u.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:'12px 14px'}}>
-              <div><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:15,color:C.text}}>{u.display_name||u.name}</div>{u.display_name&&<div style={{fontSize:11,color:C.textDim}}>@{u.name}</div>}</div>
-              <Tag color={C.greenSoft}>Aprobado</Tag>
-            </div>
-          ))}
+  <div key={u.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:'12px 14px'}}>
+    <div><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:15,color:C.text}}>{u.display_name||u.name}</div>{u.display_name&&<div style={{fontSize:11,color:C.textDim}}>@{u.name}</div>}</div>
+    <div style={{display:'flex',alignItems:'center',gap:8}}>
+      <Tag color={C.greenSoft}>Aprobado</Tag>
+      <Btn onClick={()=>onReject(u.id)} variant='danger' small>🗑</Btn>
+    </div>
+  </div>
+))}
 
           {/* RESET CAMPEONATO */}
           <div style={{height:1,background:C.border,margin:'8px 0'}}/>
