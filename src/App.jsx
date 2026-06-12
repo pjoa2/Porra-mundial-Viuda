@@ -149,9 +149,14 @@ function calcScore(userBets,results,matches,scoring){
     Object.keys(GROUPS).forEach(g=>{
       const bet=userBets.groups[g]||[],real=results.groups[g]||[]
       if(real.length<2)return
-      if(bet[0]&&bet[0]===real[0])pts+=S.groups_first
-      else if(bet[1]&&bet[1]===real[1])pts+=S.groups_second
-      else{if(bet[0]&&real.slice(0,2).includes(bet[0]))pts+=S.groups_qualified;if(bet[1]&&real.slice(0,2).includes(bet[1]))pts+=S.groups_qualified}
+      if(bet[0]&&real[0]){
+  if(bet[0]===real[0])pts+=S.groups_first
+  else if(real.slice(0,2).includes(bet[0]))pts+=S.groups_qualified
+}
+if(bet[1]&&real[1]){
+  if(bet[1]===real[1])pts+=S.groups_first
+  else if(real.slice(0,2).includes(bet[1]))pts+=S.groups_qualified
+}
     })
     if(pts>0){total+=pts;breakdown.push({label:'Grupos',pts})}
   }
