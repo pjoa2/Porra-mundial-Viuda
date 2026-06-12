@@ -15,7 +15,7 @@ const DEFAULT_SCORING = {
 
 const SCORING_LABELS = [
   {key:'groups_first',   label:'Grupos — Posición exacta', icon:'⚽'},
-    {key:'groups_qualified',label:'Grupos — Clasificado',    icon:'⚽'},
+    {key:'groups_qualified',label:'Grupos — Clasificado sin posición exacta',icon:'⚽'},
   {key:'r32',            label:'Dieciseisavos — Acierto',  icon:'🔵'},
   {key:'r16',            label:'Octavos — Acierto',        icon:'🟡'},
   {key:'qf',             label:'Cuartos — Acierto',        icon:'🟠'},
@@ -452,7 +452,7 @@ function ScoringScreen({scoring}){
       <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:22,color:C.text,marginBottom:4}}>Sistema de puntuación</div>
       <div style={{background:`${C.blue}18`,border:`1px solid ${C.blue}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.textMuted}}>Los puntos pueden ser modificados por el administrador.</div>
       {[
-        {phase:'Fase de Grupos',icon:'⚽',items:[{label:'Posición exacta (por equipo)',pts:S.groups_first,color:C.gold},{label:'Clasificado (sin orden)',pts:S.groups_qualified,color:C.text}]},
+        {phase:'Fase de Grupos',icon:'⚽',items:[{label:'Posición exacta (por equipo)',pts:S.groups_first,color:C.gold},{label:'Clasificado sin posición exacta',pts:S.groups_qualified,color:C.text}]},
         {phase:'Dieciseisavos',icon:'🔵',items:[{label:'Acertar clasificado',pts:S.r32,color:C.blue}]},
         {phase:'Octavos',icon:'🟡',items:[{label:'Acertar clasificado',pts:S.r16,color:C.gold}]},
         {phase:'Cuartos',icon:'🟠',items:[{label:'Acertar clasificado',pts:S.qf,color:C.accentHover}]},
