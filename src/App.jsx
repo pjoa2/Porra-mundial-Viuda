@@ -653,6 +653,7 @@ function AdminPanel({results,matches,scoring,phases,users,onSave,onSaveMatches,o
   const[saved,setSaved]=useState(false)
   const[simulating,setSimulating]=useState(null)
   const[confirmReset,setConfirmReset]=useState(false)
+  const[confirmDeleteUser,setConfirmDeleteUser]=useState(null)
   const[resetting,setResetting]=useState(false)
 
   useEffect(()=>setLocal(JSON.parse(JSON.stringify(results||{}))),[results])
@@ -785,12 +786,23 @@ function AdminPanel({results,matches,scoring,phases,users,onSave,onSaveMatches,o
           )}
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:C.textMuted}}>✅ Aprobados ({approved.length})</div>
           {approved.map(u=>(
-  <div key={u.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:'12px 14px'}}>
-    <div><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:15,color:C.text}}>{u.display_name||u.name}</div>{u.display_name&&<div style={{fontSize:11,color:C.textDim}}>@{u.name}</div>}</div>
-    <div style={{display:'flex',alignItems:'center',gap:8}}>
-      <Tag color={C.greenSoft}>Aprobado</Tag>
-      <Btn onClick={()=>onReject(u.id)} variant='danger' small>🗑</Btn>
+  <div key={u.id} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:'12px 14px'}}>
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+      <div><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:15,color:C.text}}>{u.display_name||u.name}</div>{u.display_name&&<div style={{fontSize:11,color:C.textDim}}>@{u.name}</div>}</div>
+      <div style={{display:'flex',alignItems:'center',gap:8}}>
+        <Tag color={C.greenSoft}>Aprobado</Tag>
+        <Btn onClick={()=>setConfirmDeleteUser(u.id)} variant='danger' small>🗑</Btn>
+      </div>
     </div>
+    {confirmDeleteUser===u.id&&(
+      <div style={{marginTop:10,background:`${C.accent}18`,borderRadius:8,padding:'10px 12px',display:'flex',flexDirection:'column',gap:8}}>
+        <div style={{fontSize:12,color:C.accentHover,fontWeight:700,textAlign:'center'}}>¿Seguro que quieres eliminar a {u.display_name||u.name}? Se borrarán todas sus apuestas.</div>
+        <div style={{display:'flex',gap:8}}>
+          <Btn onClick={()=>setConfirmDeleteUser(null)} variant='ghost' full small>Cancelar</Btn>
+          <Btn onClick={()=>{onReject(u.id);setConfirmDeleteUser(null)}} variant='danger' full small>Sí, eliminar</Btn>
+        </div>
+      </div>
+    )}
   </div>
 ))}
 
