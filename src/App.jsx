@@ -232,7 +232,7 @@ function GroupBets({groupBets,onChange,disabled,scoring}){
   function handleChange(g,nb){setLocal(prev=>({...prev,[g]:nb}));onChange(g,nb)}
   return(
     <div style={{display:'flex',flexDirection:'column',gap:14}}>
-      <div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.silver}}>🥇 <b style={{color:C.gold}}>1º exacto +{S.groups_first}pts</b> · 🥈 <b style={{color:C.silver}}>2º exacto +{S.groups_second}pts</b> · ✅ Clasificado <b>+{S.groups_qualified}pt</b></div>
+<div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.silver}}>🥇🥈 <b style={{color:C.gold}}>Posición exacta +{S.groups_first}pts</b> · ✅ Clasificado sin posición <b>+{S.groups_qualified}pt</b></div>
       {Object.entries(GROUPS).map(([g,teams])=>{
         const bet=local[g]||['','']
         return(
