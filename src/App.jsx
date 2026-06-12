@@ -345,7 +345,7 @@ function UserBetsViewer({user,bets,results,matches,scoring,phases,onBack}){
                   <div key={pos} style={{display:'flex',alignItems:'center',gap:8,marginBottom:pos===0?6:0,background:C.surfaceHigh,borderRadius:8,padding:'7px 10px'}}>
                     <span style={{fontSize:14}}>{pos===0?'🥇':'🥈'}</span>
                     <div style={{flex:1,fontSize:13,color:team?C.text:C.textDim}}>{team||'— Sin apostar —'}</div>
-                    {correct&&<span style={{color:C.greenSoft,fontSize:12,fontWeight:700}}>✓ +{pos===0?S.groups_first:S.groups_second}pts</span>}
+                    {correct&&<span style={{color:C.greenSoft,fontSize:12,fontWeight:700}}>✓ +{S.groups_first}pts</span>}
                     {partial&&<span style={{color:C.gold,fontSize:12,fontWeight:700}}>~ +{S.groups_qualified}pt</span>}
                     {real[pos]&&!correct&&!partial&&team&&<span style={{color:C.accent,fontSize:12}}>✗</span>}
                   </div>
