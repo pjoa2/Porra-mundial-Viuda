@@ -643,6 +643,80 @@ function Leaderboard({users,betsMap,results,matches,scoring,phases,currentUserId
   )
 }
 
+function AdminBetEditor({users,matches,results,betsMap,scoring,onSave}){
+  const[selectedUser,setSelectedUser]=useState('')
+  const[selectedPhase,setSelectedPhase]=useState('r16')
+  const S={...DEFAULT_SCORING,...scoring}
+
+  const user=users.find(u=>u.id===selectedUser)
+  const phaseMatches=(matches?.[selectedPhase]||[]).filter(m=>m.t1&&m.t2)
+  const userPhaseBets=betsMap?.[selectedUser]?.[selectedPhase]||{}
+
+  return(
+    <div style={{display:'flex',flexDirection:'column',gap:14}}>
+      <div style={{background:`${C.blue}18`,border:`1px solid ${C.blue}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.textMuted}}>
+        Edita la apuesta de un usuario para una fase específica. Solo usa esto en casos excepcionales.
+      </div>
+
+      <Card style={{padding:'13px 15px'}}>
+        <div style={{fontSize:11,color:C.textMuted,marginBottom:8,letterSpacing:1,textTransform:'uppercase'}}>Selecciona usuario</div>
+        <select value={selectedUser} onChange={e=>setSelectedUser(e.target.value)} style={{...inp,fontSize:14,padding:'8px 10px'}}>
+          <option value=''>— Selecciona usuario —</option>
+          {users.map(u=><option key={u.id} value={u.id}>{u.display_name||u.name}</option>)}
+        </select>
+      </Card>
+
+      {selectedUser&&(
+        <Card style={{padding:'13px 15px'}}>
+          <div style={{fontSize:11,color:C.textMuted,marginBottom:8,letterSpacing:1,textTransform:'uppercase'}}>Selecciona fase</div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+            {DEFAULT_PHASES.filter(p=>p.id!=='groups').map(p=>(
+              <button key={p.id} onClick={()=>setSelectedPhase(p.id)} style={{padding:'6px 14px',borderRadius:20,border:`1px solid ${selectedPhase===p.id?C.accent:C.border}`,background:selectedPhase===p.id?C.accent:'transparent',color:selectedPhase===p.id?'#fff':C.textMuted,cursor:'pointer',fontSize:12,fontWeight:700,fontFamily:'inherit'}}>{p.icon} {p.short}</button>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {selectedUser&&selectedPhase&&(
+        <>
+          {phaseMatches.length===0?(
+            <Card><div style={{color:C.textMuted,textAlign:'center',padding:20,fontSize:13}}>No hay cruces definidos para esta fase</div></Card>
+          ):(
+            <div style={{display:'flex',flexDirection:'column',gap:10}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:C.text}}>
+                {user?.display_name||user?.name} — {DEFAULT_PHASES.find(p=>p.id===selectedPhase)?.label}
+              </div>
+              <div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.textMuted}}>
+                ✅ Acierto por partido: <b style={{color:C.gold}}>+{S[selectedPhase]||0} pts</b>
+              </div>
+              {phaseMatches.map((m,idx)=>{
+                const bet=userPhaseBets[m.id]
+                const real=results?.[selectedPhase]?.[m.id]
+                const correct=bet&&real&&bet===real
+                return(
+                  <Card key={m.id} style={{padding:'13px 15px',borderColor:!bet?`${C.gold}66`:undefined}}>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:9}}>
+                      <div style={{fontSize:11,color:C.textMuted,letterSpacing:1}}>PARTIDO {idx+1}</div>
+                      {!bet&&<Tag color={C.gold}>⚠ Sin apuesta</Tag>}
+                      {correct&&<Tag color={C.greenSoft}>✓ Acertado</Tag>}
+                    </div>
+                    <div style={{display:'flex',gap:8}}>
+                      {[m.t1,m.t2].map(team=>(
+                        <button key={team} onClick={()=>onSave(selectedUser,selectedPhase,m.id,team)} style={{flex:1,padding:'10px 6px',borderRadius:10,cursor:'pointer',border:`2px solid ${bet===team?C.green:C.border}`,background:bet===team?`${C.green}22`:C.surfaceHigh,color:bet===team?C.greenSoft:C.text,fontWeight:700,fontSize:13,fontFamily:'inherit',transition:'all .15s',textAlign:'center',wordBreak:'break-word'}}>
+                          {bet===team&&'✓ '}{team}
+                        </button>
+                      ))}
+                    </div>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
 function AdminPanel({results,matches,scoring,phases,users,betsMap,onSave,onSaveMatches,onSaveScoring,onSavePhases,onApprove,onReject,onLoadAll}){
   const[local,setLocal]=useState(JSON.parse(JSON.stringify(results||{})))
   const[localMatches,setLocalMatches]=useState(JSON.parse(JSON.stringify(matches||{})))
@@ -992,29 +1066,25 @@ async function resetUserPassword(userId){
 
       {/* PUNTUACIÓN */}
       {activeSection==='editbet'&&(
-  <div style={{display:'flex',flexDirection:'column',gap:14}}>
-    <div style={{background:`${C.blue}18`,border:`1px solid ${C.blue}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.textMuted}}>
-      Edita la apuesta de un usuario para una fase específica. Solo usa esto en casos excepcionales.
-    </div>
-    {/* Select user */}
-    <Card style={{padding:'13px 15px'}}>
-      <div style={{fontSize:11,color:C.textMuted,marginBottom:8,letterSpacing:1,textTransform:'uppercase'}}>Selecciona usuario</div>
-      <select value={editingBet?.userId||''} onChange={e=>{const u=approved.find(u=>u.id===e.target.value);setEditingBet(u?{userId:u.id,userName:u.display_name||u.name,phaseId:editingBet?.phaseId||'r16'}:null)}} style={{...inp,fontSize:14,padding:'8px 10px'}}>
-        <option value=''>— Selecciona usuario —</option>
-        {approved.map(u=><option key={u.id} value={u.id}>{u.display_name||u.name}</option>)}
-      </select>
-    </Card>
-    {/* Select phase */}
-    {editingBet?.userId&&(
-      <Card style={{padding:'13px 15px'}}>
-        <div style={{fontSize:11,color:C.textMuted,marginBottom:8,letterSpacing:1,textTransform:'uppercase'}}>Selecciona fase</div>
-        <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
-          {DEFAULT_PHASES.filter(p=>p.id!=='groups').map(p=>(
-            <button key={p.id} onClick={()=>setEditingBet(prev=>({...prev,phaseId:p.id}))} style={{padding:'6px 14px',borderRadius:20,border:`1px solid ${editingBet?.phaseId===p.id?C.accent:C.border}`,background:editingBet?.phaseId===p.id?C.accent:'transparent',color:editingBet?.phaseId===p.id?'#fff':C.textMuted,cursor:'pointer',fontSize:12,fontWeight:700,fontFamily:'inherit'}}>{p.icon} {p.short}</button>
-          ))}
-        </div>
-      </Card>
-    )}
+  <AdminBetEditor
+    users={approved}
+    matches={matches}
+    results={results}
+    betsMap={betsMap}
+    scoring={scoring}
+    onSave={async(userId,phaseId,matchId,team)=>{
+      const userPhaseBets={...(betsMap?.[userId]?.[phaseId]||{})}
+      userPhaseBets[matchId]=team
+      const{error}=await supabase.from('porra_bets').upsert(
+        {user_id:userId,phase:phaseId,data:userPhaseBets,updated_at:new Date().toISOString()},
+        {onConflict:'user_id,phase'}
+      )
+      if(error){notify('❌ Error al guardar');return}
+      await onLoadAll()
+      notify('✓ Apuesta guardada')
+    }}
+  />
+)}
     {/* Edit bets */}
     {editingBet?.userId&&editingBet?.phaseId&&(()=>{
       const phaseMatches=(matches?.[editingBet.phaseId]||[]).filter(m=>m.t1&&m.t2)
