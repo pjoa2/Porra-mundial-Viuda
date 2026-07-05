@@ -643,7 +643,7 @@ function Leaderboard({users,betsMap,results,matches,scoring,phases,currentUserId
   )
 }
 
-function AdminPanel({results,matches,scoring,phases,users,onSave,onSaveMatches,onSaveScoring,onSavePhases,onApprove,onReject,onLoadAll}){
+function AdminPanel({results,matches,scoring,phases,users,betsMap,onSave,onSaveMatches,onSaveScoring,onSavePhases,onApprove,onReject,onLoadAll}){
   const[local,setLocal]=useState(JSON.parse(JSON.stringify(results||{})))
   const[localMatches,setLocalMatches]=useState(JSON.parse(JSON.stringify(matches||{})))
   const[localScoring,setLocalScoring]=useState({...DEFAULT_SCORING,...scoring})
@@ -1280,7 +1280,7 @@ export default function App(){
           </>
         )}
         {activeTab==='admin'&&session.role==='admin'&&(
-          <AdminPanel results={results} matches={matches} scoring={scoring} phases={phases} users={users} onSave={handleSaveResults} onSaveMatches={handleSaveMatches} onSaveScoring={handleSaveScoring} onSavePhases={handleSavePhases} onApprove={handleApprove} onReject={handleReject} onLoadAll={loadAll}/>
+         <AdminPanel results={results} matches={matches} scoring={scoring} phases={phases} users={users} betsMap={betsMap} onSave={handleSaveResults} onSaveMatches={handleSaveMatches} onSaveScoring={handleSaveScoring} onSavePhases={handleSavePhases} onApprove={handleApprove} onReject={handleReject} onLoadAll={loadAll}/>
         )}
       </main>
 
