@@ -653,6 +653,7 @@ function AdminPanel({results,matches,scoring,phases,users,onSave,onSaveMatches,o
   const[saved,setSaved]=useState(false)
   const[simulating,setSimulating]=useState(null)
   const[confirmReset,setConfirmReset]=useState(false)
+  const[editingBet,setEditingBet]=useState(null) // {userId, userName, phaseId}
   const[confirmDeleteUser,setConfirmDeleteUser]=useState(null)
   const[resetPassUser,setResetPassUser]=useState(null)
 const[newTempPass,setNewTempPass]=useState('')
@@ -767,7 +768,7 @@ async function resetUserPassword(userId){
       </div>
 
       <div style={{display:'flex',gap:3,background:C.surfaceHigh,borderRadius:10,padding:4,overflowX:'auto'}}>
-        {[['users',`👥${pending.length>0?`(${pending.length})`:''}`],['matches','⚽ Cruces'],['results','📋 Result.'],['dates','📅 Fechas'],['sim','🎲 Sim'],['scoring','🏅 Pts']].map(([id,label])=>(
+       {[['users',`👥${pending.length>0?`(${pending.length})`:''}`],['matches','⚽ Cruces'],['results','📋 Result.'],['dates','📅 Fechas'],['sim','🎲 Sim'],['scoring','🏅 Pts'],['editbet','✏️ Apuesta']].map(([id,label])=>(
           <button key={id} onClick={()=>setActiveSection(id)} style={{flex:1,whiteSpace:'nowrap',padding:'8px 4px',border:'none',borderRadius:8,cursor:'pointer',background:activeSection===id?C.accent:'transparent',color:activeSection===id?'#fff':C.textMuted,fontWeight:800,fontSize:11,fontFamily:"'Barlow Condensed',sans-serif"}}>{label}</button>
         ))}
       </div>
@@ -990,6 +991,86 @@ async function resetUserPassword(userId){
       )}
 
       {/* PUNTUACIÓN */}
+      {activeSection==='editbet'&&(
+  <div style={{display:'flex',flexDirection:'column',gap:14}}>
+    <div style={{background:`${C.blue}18`,border:`1px solid ${C.blue}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.textMuted}}>
+      Edita la apuesta de un usuario para una fase específica. Solo usa esto en casos excepcionales.
+    </div>
+    {/* Select user */}
+    <Card style={{padding:'13px 15px'}}>
+      <div style={{fontSize:11,color:C.textMuted,marginBottom:8,letterSpacing:1,textTransform:'uppercase'}}>Selecciona usuario</div>
+      <select value={editingBet?.userId||''} onChange={e=>{const u=approved.find(u=>u.id===e.target.value);setEditingBet(u?{userId:u.id,userName:u.display_name||u.name,phaseId:editingBet?.phaseId||'r16'}:null)}} style={{...inp,fontSize:14,padding:'8px 10px'}}>
+        <option value=''>— Selecciona usuario —</option>
+        {approved.map(u=><option key={u.id} value={u.id}>{u.display_name||u.name}</option>)}
+      </select>
+    </Card>
+    {/* Select phase */}
+    {editingBet?.userId&&(
+      <Card style={{padding:'13px 15px'}}>
+        <div style={{fontSize:11,color:C.textMuted,marginBottom:8,letterSpacing:1,textTransform:'uppercase'}}>Selecciona fase</div>
+        <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+          {DEFAULT_PHASES.filter(p=>p.id!=='groups').map(p=>(
+            <button key={p.id} onClick={()=>setEditingBet(prev=>({...prev,phaseId:p.id}))} style={{padding:'6px 14px',borderRadius:20,border:`1px solid ${editingBet?.phaseId===p.id?C.accent:C.border}`,background:editingBet?.phaseId===p.id?C.accent:'transparent',color:editingBet?.phaseId===p.id?'#fff':C.textMuted,cursor:'pointer',fontSize:12,fontWeight:700,fontFamily:'inherit'}}>{p.icon} {p.short}</button>
+          ))}
+        </div>
+      </Card>
+    )}
+    {/* Edit bets */}
+    {editingBet?.userId&&editingBet?.phaseId&&(()=>{
+      const phaseMatches=(matches?.[editingBet.phaseId]||[]).filter(m=>m.t1&&m.t2)
+      const userPhaseBets=betsMap?.[editingBet.userId]?.[editingBet.phaseId]||{}
+      const S={...DEFAULT_SCORING,...scoring}
+      const pts=S[editingBet.phaseId]||0
+
+      if(phaseMatches.length===0)return(
+        <Card><div style={{color:C.textMuted,textAlign:'center',padding:20,fontSize:13}}>No hay cruces definidos para esta fase</div></Card>
+      )
+
+      async function saveAdminBet(matchId,team){
+        const updated={...userPhaseBets,[matchId]:team}
+        const{error}=await supabase.from('porra_bets').upsert(
+          {user_id:editingBet.userId,phase:editingBet.phaseId,data:updated,updated_at:new Date().toISOString()},
+          {onConflict:'user_id,phase'}
+        )
+        if(error){notify('❌ Error al guardar');return}
+        await onLoadAll()
+        notify(`✓ Apuesta de ${editingBet.userName} guardada`)
+      }
+
+      return(
+        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:C.text}}>
+            Apuestas de {editingBet.userName} — {DEFAULT_PHASES.find(p=>p.id===editingBet.phaseId)?.label}
+          </div>
+          <div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.textMuted}}>
+            ✅ Acierto por partido: <b style={{color:C.gold}}>+{pts} pts</b>
+          </div>
+          {phaseMatches.map((m,idx)=>{
+            const bet=userPhaseBets[m.id]
+            const real=results?.[editingBet.phaseId]?.[m.id]
+            const correct=bet&&real&&bet===real
+            return(
+              <Card key={m.id} style={{padding:'13px 15px',borderColor:!bet?`${C.gold}66`:undefined}}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:9}}>
+                  <div style={{fontSize:11,color:C.textMuted,letterSpacing:1}}>PARTIDO {idx+1}</div>
+                  {!bet&&<Tag color={C.gold}>⚠ Sin apuesta</Tag>}
+                  {correct&&<Tag color={C.greenSoft}>✓ Acertado</Tag>}
+                </div>
+                <div style={{display:'flex',gap:8}}>
+                  {[m.t1,m.t2].map(team=>(
+                    <button key={team} onClick={()=>saveAdminBet(m.id,team)} style={{flex:1,padding:'10px 6px',borderRadius:10,cursor:'pointer',border:`2px solid ${bet===team?C.green:C.border}`,background:bet===team?`${C.green}22`:C.surfaceHigh,color:bet===team?C.greenSoft:C.text,fontWeight:700,fontSize:13,fontFamily:'inherit',transition:'all .15s',textAlign:'center',wordBreak:'break-word'}}>
+                      {bet===team&&'✓ '}{team}
+                    </button>
+                  ))}
+                </div>
+              </Card>
+            )
+          })}
+        </div>
+      )
+    })()}
+  </div>
+)}
       {activeSection==='scoring'&&(
         <>
           <div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.textMuted}}>Modifica los puntos de cada fase. Los cambios afectan a todos en tiempo real.</div>
