@@ -9,19 +9,19 @@ const C = {
 }
 
 const DEFAULT_SCORING = {
-  groups_first:4,groups_second:3,groups_qualified:1,
-  r32:3,r16:5,qf:8,sf:12,third:10,final_winner:25,final_runner:15
+  groups_first:2,groups_second:0,groups_qualified:1,
+  r32:3,r16:5,qf:8,sf:12,third:10,final_winner:25,final_runner:0
 }
 
 const SCORING_LABELS = [
-  {key:'groups_first',   label:'Grupos — Posición exacta', icon:'⚽'},
-    {key:'groups_qualified',label:'Grupos — Clasificado sin posición exacta',icon:'⚽'},
-  {key:'r32',            label:'Dieciseisavos — Acierto',  icon:'🔵'},
-  {key:'r16',            label:'Octavos — Acierto',        icon:'🟡'},
-  {key:'qf',             label:'Cuartos — Acierto',        icon:'🟠'},
-  {key:'sf',             label:'Semis — Acierto',          icon:'🔴'},
-  {key:'third',          label:'3º/4º — Ganador',          icon:'🥉'},
-  {key:'final_winner',   label:'Final — Campeón',          icon:'🏆'},
+  {key:'groups_first',   label:'Grupos — Posición exacta',              icon:'⚽'},
+  {key:'groups_qualified',label:'Grupos — Clasificado sin posición exacta', icon:'⚽'},
+  {key:'r32',            label:'Dieciseisavos — Acierto',               icon:'🔵'},
+  {key:'r16',            label:'Octavos — Acierto',                     icon:'🟡'},
+  {key:'qf',             label:'Cuartos — Acierto',                     icon:'🟠'},
+  {key:'sf',             label:'Semis — Acierto',                       icon:'🔴'},
+  {key:'third',          label:'3º/4º — Ganador',                       icon:'🥉'},
+  {key:'final_winner',   label:'Final — Campeón',                       icon:'🏆'},
 ]
 
 const GROUPS = {
@@ -148,14 +148,8 @@ function calcScore(userBets,results,matches,scoring){
     Object.keys(GROUPS).forEach(g=>{
       const bet=userBets.groups[g]||[],real=results.groups[g]||[]
       if(real.length<2)return
-      if(bet[0]&&real[0]){
-  if(bet[0]===real[0])pts+=S.groups_first
-  else if(real.slice(0,2).includes(bet[0]))pts+=S.groups_qualified
-}
-if(bet[1]&&real[1]){
-  if(bet[1]===real[1])pts+=S.groups_first
-  else if(real.slice(0,2).includes(bet[1]))pts+=S.groups_qualified
-}
+      if(bet[0]&&real[0]){if(bet[0]===real[0])pts+=S.groups_first;else if(real.slice(0,2).includes(bet[0]))pts+=S.groups_qualified}
+      if(bet[1]&&real[1]){if(bet[1]===real[1])pts+=S.groups_first;else if(real.slice(0,2).includes(bet[1]))pts+=S.groups_qualified}
     })
     if(pts>0){total+=pts;breakdown.push({label:'Grupos',pts})}
   }
@@ -173,7 +167,7 @@ if(bet[1]&&real[1]){
     const fm=(matches?.final||[])[0]
     if(fm){
       let pts=0
-     if(userBets.final[fm.id+'_winner']&&results.final[fm.id+'_winner']&&userBets.final[fm.id+'_winner']===results.final[fm.id+'_winner'])pts+=S.final_winner
+      if(userBets.final[fm.id+'_winner']&&results.final[fm.id+'_winner']&&userBets.final[fm.id+'_winner']===results.final[fm.id+'_winner'])pts+=S.final_winner
       if(pts>0){total+=pts;breakdown.push({label:'Final',pts})}
     }
   }
@@ -217,7 +211,7 @@ function PendingScreen({user,onLogout}){
         <Card style={{padding:28}}>
           <div style={{fontSize:40,marginBottom:16}}>⏳</div>
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:22,color:C.text,marginBottom:10}}>Cuenta pendiente</div>
-          <div style={{fontSize:14,color:C.textMuted,lineHeight:1.6,marginBottom:20}}>Hola <b style={{color:C.text}}>{user.display_name||user.name}</b>, tu cuenta está pendiente de aprobación. En cuanto el administrador te apruebe podrás acceder.</div>
+          <div style={{fontSize:14,color:C.textMuted,lineHeight:1.6,marginBottom:20}}>Hola <b style={{color:C.text}}>{user.display_name||user.name}</b>, tu cuenta está pendiente de aprobación.</div>
           <Btn onClick={onLogout} variant='ghost' full>Cerrar sesión</Btn>
         </Card>
       </div>
@@ -232,7 +226,7 @@ function GroupBets({groupBets,onChange,disabled,scoring}){
   function handleChange(g,nb){setLocal(prev=>({...prev,[g]:nb}));onChange(g,nb)}
   return(
     <div style={{display:'flex',flexDirection:'column',gap:14}}>
-<div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.silver}}>🥇🥈 <b style={{color:C.gold}}>Posición exacta +{S.groups_first}pts</b> · ✅ Clasificado sin posición <b>+{S.groups_qualified}pt</b></div>
+      <div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.silver}}>🥇🥈 <b style={{color:C.gold}}>Posición exacta +{S.groups_first}pts</b> · ✅ Clasificado sin posición <b>+{S.groups_qualified}pt</b></div>
       {Object.entries(GROUPS).map(([g,teams])=>{
         const bet=local[g]||['','']
         return(
@@ -292,9 +286,13 @@ function ThirdPlaceBet({thirdBet,results,matches,onChange,disabled,scoring}){
       {!thirdMatch?<Card><div style={{color:C.textMuted,textAlign:'center',padding:24,fontSize:14}}>⏳ El administrador aún no ha publicado este partido</div></Card>:(
         <Card style={{padding:'13px 15px'}}>
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:C.text,marginBottom:10}}>🥉 ¿Quién gana el 3er puesto?</div>
-         <div style={{display:'flex',gap:8}}>
-  {[thirdMatch.t1,thirdMatch.t2].map(team=><button key={team} disabled={disabled} onClick={()=>!disabled&&handleChange(thirdMatch.id,team)} style={{flex:1,padding:'12px 8px',borderRadius:10,cursor:disabled?'not-allowed':'pointer',border:`2px solid ${local[thirdMatch.id]===team?C.green:C.border}`,background:local[thirdMatch.id]===team?`${C.green}22`:C.surfaceHigh,color:local[thirdMatch.id]===team?C.greenSoft:C.text,fontWeight:700,fontSize:14,fontFamily:'inherit',transition:'all .15s',textAlign:'center',wordBreak:'break-word'}}>{local[thirdMatch.id]===team&&'✓ '}{team}</button>)}
-</div>
+          <div style={{display:'flex',gap:8}}>
+            {[thirdMatch.t1,thirdMatch.t2].map(team=>(
+              <button key={team} disabled={disabled} onClick={()=>!disabled&&handleChange(thirdMatch.id,team)} style={{flex:1,padding:'12px 8px',borderRadius:10,cursor:disabled?'not-allowed':'pointer',border:`2px solid ${local[thirdMatch.id]===team?C.green:C.border}`,background:local[thirdMatch.id]===team?`${C.green}22`:C.surfaceHigh,color:local[thirdMatch.id]===team?C.greenSoft:C.text,fontWeight:700,fontSize:14,fontFamily:'inherit',transition:'all .15s',textAlign:'center',wordBreak:'break-word'}}>
+                {local[thirdMatch.id]===team&&'✓ '}{team}
+              </button>
+            ))}
+          </div>
         </Card>
       )}
     </div>
@@ -321,6 +319,76 @@ function FinalBets({finalBet,results,matches,onChange,disabled,scoring}){
             ))}
           </div>
         </Card>
+      )}
+    </div>
+  )
+}
+
+function AdminBetEditor({users,matches,results,betsMap,scoring,onSave}){
+  const[selectedUser,setSelectedUser]=useState('')
+  const[selectedPhase,setSelectedPhase]=useState('r16')
+  const S={...DEFAULT_SCORING,...scoring}
+  const user=users.find(u=>u.id===selectedUser)
+  const phaseMatches=(matches?.[selectedPhase]||[]).filter(m=>m.t1&&m.t2)
+  const userPhaseBets=betsMap?.[selectedUser]?.[selectedPhase]||{}
+  return(
+    <div style={{display:'flex',flexDirection:'column',gap:14}}>
+      <div style={{background:`${C.blue}18`,border:`1px solid ${C.blue}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.textMuted}}>
+        Edita la apuesta de un usuario para una fase específica. Solo usa esto en casos excepcionales.
+      </div>
+      <Card style={{padding:'13px 15px'}}>
+        <div style={{fontSize:11,color:C.textMuted,marginBottom:8,letterSpacing:1,textTransform:'uppercase'}}>Selecciona usuario</div>
+        <select value={selectedUser} onChange={e=>setSelectedUser(e.target.value)} style={{...inp,fontSize:14,padding:'8px 10px'}}>
+          <option value=''>— Selecciona usuario —</option>
+          {users.map(u=><option key={u.id} value={u.id}>{u.display_name||u.name}</option>)}
+        </select>
+      </Card>
+      {selectedUser&&(
+        <Card style={{padding:'13px 15px'}}>
+          <div style={{fontSize:11,color:C.textMuted,marginBottom:8,letterSpacing:1,textTransform:'uppercase'}}>Selecciona fase</div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+            {DEFAULT_PHASES.filter(p=>p.id!=='groups').map(p=>(
+              <button key={p.id} onClick={()=>setSelectedPhase(p.id)} style={{padding:'6px 14px',borderRadius:20,border:`1px solid ${selectedPhase===p.id?C.accent:C.border}`,background:selectedPhase===p.id?C.accent:'transparent',color:selectedPhase===p.id?'#fff':C.textMuted,cursor:'pointer',fontSize:12,fontWeight:700,fontFamily:'inherit'}}>{p.icon} {p.short}</button>
+            ))}
+          </div>
+        </Card>
+      )}
+      {selectedUser&&selectedPhase&&(
+        <>
+          {phaseMatches.length===0?(
+            <Card><div style={{color:C.textMuted,textAlign:'center',padding:20,fontSize:13}}>No hay cruces definidos para esta fase</div></Card>
+          ):(
+            <div style={{display:'flex',flexDirection:'column',gap:10}}>
+              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:C.text}}>
+                {user?.display_name||user?.name} — {DEFAULT_PHASES.find(p=>p.id===selectedPhase)?.label}
+              </div>
+              <div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.textMuted}}>
+                ✅ Acierto por partido: <b style={{color:C.gold}}>+{S[selectedPhase]||0} pts</b>
+              </div>
+              {phaseMatches.map((m,idx)=>{
+                const bet=userPhaseBets[m.id]
+                const real=results?.[selectedPhase]?.[m.id]
+                const correct=bet&&real&&bet===real
+                return(
+                  <Card key={m.id} style={{padding:'13px 15px',borderColor:!bet?`${C.gold}66`:undefined}}>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:9}}>
+                      <div style={{fontSize:11,color:C.textMuted,letterSpacing:1}}>PARTIDO {idx+1}</div>
+                      {!bet&&<Tag color={C.gold}>⚠ Sin apuesta</Tag>}
+                      {correct&&<Tag color={C.greenSoft}>✓ Acertado</Tag>}
+                    </div>
+                    <div style={{display:'flex',gap:8}}>
+                      {[m.t1,m.t2].map(team=>(
+                        <button key={team} onClick={()=>onSave(selectedUser,selectedPhase,m.id,team)} style={{flex:1,padding:'10px 6px',borderRadius:10,cursor:'pointer',border:`2px solid ${bet===team?C.green:C.border}`,background:bet===team?`${C.green}22`:C.surfaceHigh,color:bet===team?C.greenSoft:C.text,fontWeight:700,fontSize:13,fontFamily:'inherit',transition:'all .15s',textAlign:'center',wordBreak:'break-word'}}>
+                          {bet===team&&'✓ '}{team}
+                        </button>
+                      ))}
+                    </div>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
+        </>
       )}
     </div>
   )
@@ -400,24 +468,17 @@ function UserBetsViewer({user,bets,results,matches,scoring,phases,onBack}){
     const fm=(matches?.final||[]).filter(m=>m.t1&&m.t2)[0]
     if(!fm)return<Card><div style={{color:C.textMuted,textAlign:'center',padding:20}}>Sin partido</div></Card>
     const fb=bets?.final||{}
+    const bet=fb[fm.id+'_winner'],real=results?.final?.[fm.id+'_winner'],correct=bet&&real&&bet===real
     return(
-      <div style={{display:'flex',flexDirection:'column',gap:10}}>
-        <div style={{fontSize:13,color:C.textMuted,textAlign:'center'}}>{fm.t1} vs {fm.t2}</div>
-        {[{key:fm.id+'_winner',label:'🏆 Campeón',pts:S.final_winner},{key:fm.id+'_runner',label:'🥈 Subcampeón',pts:S.final_runner}].map(({key,label,pts})=>{
-          const bet=fb[key],real=results?.final?.[key],correct=bet&&real&&bet===real
-          return(
-            <Card key={key} style={{padding:'12px 15px'}}>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:14,color:C.text,marginBottom:8}}>{label}</div>
-              <div style={{display:'flex',gap:8,alignItems:'center',background:C.surfaceHigh,borderRadius:8,padding:'10px 12px'}}>
-                <div style={{flex:1,fontSize:14,color:bet?C.text:C.textDim}}>{bet||'— Sin apostar —'}</div>
-                {real&&<div style={{fontSize:11,color:C.textMuted}}>Real: <b style={{color:C.text}}>{real}</b></div>}
-                {correct&&<span style={{color:C.greenSoft,fontSize:13,fontWeight:700}}>✓ +{pts}pts</span>}
-                {bet&&real&&!correct&&<span style={{color:C.accent,fontSize:13}}>✗</span>}
-              </div>
-            </Card>
-          )
-        })}
-      </div>
+      <Card style={{padding:'13px 15px'}}>
+        <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:C.text,marginBottom:10}}>🏆 Final: {fm.t1} vs {fm.t2}</div>
+        <div style={{display:'flex',gap:8,alignItems:'center',background:C.surfaceHigh,borderRadius:8,padding:'10px 12px'}}>
+          <div style={{flex:1,fontSize:14,color:bet?C.text:C.textDim}}>{bet||'— Sin apostar —'}</div>
+          {real&&<div style={{fontSize:11,color:C.textMuted}}>Real: <b style={{color:C.text}}>{real}</b></div>}
+          {correct&&<span style={{color:C.greenSoft,fontSize:13,fontWeight:700}}>✓ +{S.final_winner}pts</span>}
+          {bet&&real&&!correct&&<span style={{color:C.accent,fontSize:13}}>✗</span>}
+        </div>
+      </Card>
     )
   }
   return(
@@ -452,13 +513,16 @@ function ScoringScreen({scoring}){
       <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:22,color:C.text,marginBottom:4}}>Sistema de puntuación</div>
       <div style={{background:`${C.blue}18`,border:`1px solid ${C.blue}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.textMuted}}>Los puntos pueden ser modificados por el administrador.</div>
       {[
-        {phase:'Fase de Grupos',icon:'⚽',items:[{label:'Posición exacta (por equipo)',pts:S.groups_first,color:C.gold},{label:'Clasificado sin posición exacta',pts:S.groups_qualified,color:C.text}]},
+        {phase:'Fase de Grupos',icon:'⚽',items:[
+          {label:'Posición exacta (por equipo)',pts:S.groups_first,color:C.gold},
+          {label:'Clasificado sin posición exacta',pts:S.groups_qualified,color:C.text},
+        ]},
         {phase:'Dieciseisavos',icon:'🔵',items:[{label:'Acertar clasificado',pts:S.r32,color:C.blue}]},
         {phase:'Octavos',icon:'🟡',items:[{label:'Acertar clasificado',pts:S.r16,color:C.gold}]},
         {phase:'Cuartos',icon:'🟠',items:[{label:'Acertar clasificado',pts:S.qf,color:C.accentHover}]},
         {phase:'Semis',icon:'🔴',items:[{label:'Acertar clasificado',pts:S.sf,color:C.accent}]},
         {phase:'3º/4º',icon:'🥉',items:[{label:'Acertar ganador',pts:S.third,color:C.silver}]},
-        {phase:'Final',icon:'🏆',items:[{label:'Campeón',pts:S.final_winner,color:C.gold}]},,
+        {phase:'Final',icon:'🏆',items:[{label:'Campeón',pts:S.final_winner,color:C.gold}]},
       ].map((s,i)=>(
         <Card key={i} style={{padding:'14px 16px'}}>
           <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}><span style={{fontSize:20}}>{s.icon}</span><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:C.text}}>{s.phase}</div></div>
@@ -478,7 +542,7 @@ function Rules({phases}){
         {icon:'📋',title:'¿En qué consiste?',text:'Cada participante hace sus predicciones antes de que empiece cada fase. Cuantos más aciertos, más puntos. Al final del torneo gana quien más puntos haya acumulado.'},
         {icon:'⏳',title:'Plazos',text:'Las apuestas se cierran automáticamente 1 hora antes del inicio de cada fase. Una vez cerrada, no se pueden modificar las predicciones.'},
         {icon:'🔓',title:'Desbloqueo de fases',text:'Cada fase eliminatoria se desbloquea cuando el administrador completa la fase anterior y publica los cruces.'},
-        {icon:'👁',title:'Ver apuestas de otros',text:'Las apuestas se pueden ver cuando la fase ha comenzado o el administrador ha introducido todos sus resultados.'},
+        {icon:'👁',title:'Ver apuestas de otros',text:'Las apuestas se pueden ver una vez que el plazo de esa fase ha cerrado.'},
         {icon:'✅',title:'Acceso',text:'El registro está sujeto a aprobación del administrador.'},
         {icon:'📈',title:'Puntuación progresiva',text:'Cada fase vale más puntos que la anterior. La Final tiene tanto peso que cualquiera puede remontar hasta el último momento.'},
       ].map((s,i)=>(
@@ -574,8 +638,8 @@ function LoginScreen({onLogin}){
     if(!realName.trim()){setErr('Escribe tu nombre real');setLoading(false);return}
     if(pass.length<4){setErr('Mínimo 4 caracteres');setLoading(false);return}
     if(pass!==pass2){setErr('Las contraseñas no coinciden');setLoading(false);return}
-   const{data:existingList}=await supabase.from('porra_users').select('id').ilike('name',name.trim())
-if(existingList&&existingList.length>0){setErr('Ese nombre ya está en uso');setLoading(false);return}
+    const{data:existingList}=await supabase.from('porra_users').select('id').ilike('name',name.trim())
+    if(existingList&&existingList.length>0){setErr('Ese nombre ya está en uso');setLoading(false);return}
     const{data,error}=await supabase.from('porra_users').insert({name:name.trim(),password_hash:hashPassword(pass),role:'user',status:'pending',display_name:realName.trim()}).select().single()
     if(error){setErr('Error al crear cuenta');setLoading(false);return}
     localStorage.setItem('porra_user',JSON.stringify(data));onLogin(data);setLoading(false)
@@ -643,80 +707,6 @@ function Leaderboard({users,betsMap,results,matches,scoring,phases,currentUserId
   )
 }
 
-function AdminBetEditor({users,matches,results,betsMap,scoring,onSave}){
-  const[selectedUser,setSelectedUser]=useState('')
-  const[selectedPhase,setSelectedPhase]=useState('r16')
-  const S={...DEFAULT_SCORING,...scoring}
-
-  const user=users.find(u=>u.id===selectedUser)
-  const phaseMatches=(matches?.[selectedPhase]||[]).filter(m=>m.t1&&m.t2)
-  const userPhaseBets=betsMap?.[selectedUser]?.[selectedPhase]||{}
-
-  return(
-    <div style={{display:'flex',flexDirection:'column',gap:14}}>
-      <div style={{background:`${C.blue}18`,border:`1px solid ${C.blue}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.textMuted}}>
-        Edita la apuesta de un usuario para una fase específica. Solo usa esto en casos excepcionales.
-      </div>
-
-      <Card style={{padding:'13px 15px'}}>
-        <div style={{fontSize:11,color:C.textMuted,marginBottom:8,letterSpacing:1,textTransform:'uppercase'}}>Selecciona usuario</div>
-        <select value={selectedUser} onChange={e=>setSelectedUser(e.target.value)} style={{...inp,fontSize:14,padding:'8px 10px'}}>
-          <option value=''>— Selecciona usuario —</option>
-          {users.map(u=><option key={u.id} value={u.id}>{u.display_name||u.name}</option>)}
-        </select>
-      </Card>
-
-      {selectedUser&&(
-        <Card style={{padding:'13px 15px'}}>
-          <div style={{fontSize:11,color:C.textMuted,marginBottom:8,letterSpacing:1,textTransform:'uppercase'}}>Selecciona fase</div>
-          <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
-            {DEFAULT_PHASES.filter(p=>p.id!=='groups').map(p=>(
-              <button key={p.id} onClick={()=>setSelectedPhase(p.id)} style={{padding:'6px 14px',borderRadius:20,border:`1px solid ${selectedPhase===p.id?C.accent:C.border}`,background:selectedPhase===p.id?C.accent:'transparent',color:selectedPhase===p.id?'#fff':C.textMuted,cursor:'pointer',fontSize:12,fontWeight:700,fontFamily:'inherit'}}>{p.icon} {p.short}</button>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {selectedUser&&selectedPhase&&(
-        <>
-          {phaseMatches.length===0?(
-            <Card><div style={{color:C.textMuted,textAlign:'center',padding:20,fontSize:13}}>No hay cruces definidos para esta fase</div></Card>
-          ):(
-            <div style={{display:'flex',flexDirection:'column',gap:10}}>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:C.text}}>
-                {user?.display_name||user?.name} — {DEFAULT_PHASES.find(p=>p.id===selectedPhase)?.label}
-              </div>
-              <div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.textMuted}}>
-                ✅ Acierto por partido: <b style={{color:C.gold}}>+{S[selectedPhase]||0} pts</b>
-              </div>
-              {phaseMatches.map((m,idx)=>{
-                const bet=userPhaseBets[m.id]
-                const real=results?.[selectedPhase]?.[m.id]
-                const correct=bet&&real&&bet===real
-                return(
-                  <Card key={m.id} style={{padding:'13px 15px',borderColor:!bet?`${C.gold}66`:undefined}}>
-                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:9}}>
-                      <div style={{fontSize:11,color:C.textMuted,letterSpacing:1}}>PARTIDO {idx+1}</div>
-                      {!bet&&<Tag color={C.gold}>⚠ Sin apuesta</Tag>}
-                      {correct&&<Tag color={C.greenSoft}>✓ Acertado</Tag>}
-                    </div>
-                    <div style={{display:'flex',gap:8}}>
-                      {[m.t1,m.t2].map(team=>(
-                        <button key={team} onClick={()=>onSave(selectedUser,selectedPhase,m.id,team)} style={{flex:1,padding:'10px 6px',borderRadius:10,cursor:'pointer',border:`2px solid ${bet===team?C.green:C.border}`,background:bet===team?`${C.green}22`:C.surfaceHigh,color:bet===team?C.greenSoft:C.text,fontWeight:700,fontSize:13,fontFamily:'inherit',transition:'all .15s',textAlign:'center',wordBreak:'break-word'}}>
-                          {bet===team&&'✓ '}{team}
-                        </button>
-                      ))}
-                    </div>
-                  </Card>
-                )
-              })}
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  )
-}
 function AdminPanel({results,matches,scoring,phases,users,betsMap,onSave,onSaveMatches,onSaveScoring,onSavePhases,onApprove,onReject,onLoadAll}){
   const[local,setLocal]=useState(JSON.parse(JSON.stringify(results||{})))
   const[localMatches,setLocalMatches]=useState(JSON.parse(JSON.stringify(matches||{})))
@@ -727,20 +717,11 @@ function AdminPanel({results,matches,scoring,phases,users,betsMap,onSave,onSaveM
   const[saved,setSaved]=useState(false)
   const[simulating,setSimulating]=useState(null)
   const[confirmReset,setConfirmReset]=useState(false)
-  const[editingBet,setEditingBet]=useState(null) // {userId, userName, phaseId}
+  const[resetting,setResetting]=useState(false)
   const[confirmDeleteUser,setConfirmDeleteUser]=useState(null)
   const[resetPassUser,setResetPassUser]=useState(null)
-const[newTempPass,setNewTempPass]=useState('')
-const[resetMsg,setResetMsg]=useState('')
-
-async function resetUserPassword(userId){
-  if(newTempPass.length<4){setResetMsg('⚠ Mínimo 4 caracteres');return}
-  const{error}=await supabase.from('porra_users').update({password_hash:hashPassword(newTempPass)}).eq('id',userId)
-  if(error){setResetMsg('❌ Error al resetear');return}
-  setResetMsg('✓ Contraseña actualizada')
-  setTimeout(()=>{setResetPassUser(null);setNewTempPass('');setResetMsg('')},2000)
-}
-  const[resetting,setResetting]=useState(false)
+  const[newTempPass,setNewTempPass]=useState('')
+  const[resetMsg,setResetMsg]=useState('')
 
   useEffect(()=>setLocal(JSON.parse(JSON.stringify(results||{}))),[results])
   useEffect(()=>setLocalMatches(JSON.parse(JSON.stringify(matches||{}))),[matches])
@@ -749,6 +730,14 @@ async function resetUserPassword(userId){
 
   const pending=users.filter(u=>u.status==='pending')
   const approved=users.filter(u=>u.role!=='admin'&&u.status==='approved')
+
+  async function resetUserPassword(userId){
+    if(newTempPass.length<4){setResetMsg('⚠ Mínimo 4 caracteres');return}
+    const{error}=await supabase.from('porra_users').update({password_hash:hashPassword(newTempPass)}).eq('id',userId)
+    if(error){setResetMsg('❌ Error al resetear');return}
+    setResetMsg('✓ Contraseña actualizada')
+    setTimeout(()=>{setResetPassUser(null);setNewTempPass('');setResetMsg('')},2000)
+  }
 
   function getGroupQualifiers(){
     const teams=[]
@@ -790,43 +779,30 @@ async function resetUserPassword(userId){
   }
   async function saveScoring(){await onSaveScoring(localScoring);setSaved(true);setTimeout(()=>setSaved(false),2000)}
   async function savePhases(){await onSavePhases(localPhases);setSaved(true);setTimeout(()=>setSaved(false),2000)}
-
   const setGR=(g,pos,val)=>setLocal(r=>{const arr=[...(r?.groups?.[g]||['',''])];arr[pos]=val;return{...r,groups:{...(r.groups||{}),[g]:arr}}})
 
   async function simPhase(phaseId){
     setSimulating(phaseId)
     let nm={...localMatches}
-    if(phaseId!=='groups'){
-      nm=generateSimMatches(phaseId,local,localMatches)
-      setLocalMatches(nm)
-      await onSaveMatches(nm)
-    }
+    if(phaseId!=='groups'){nm=generateSimMatches(phaseId,local,localMatches);setLocalMatches(nm);await onSaveMatches(nm)}
     const nr=simulatePhaseResults(phaseId,local,nm)
     setLocal(nr);await onSave(nr)
     setSimulating(null);setSaved(true);setTimeout(()=>setSaved(false),2000)
   }
-
   async function simAll(){
     setSimulating('all');let r={},m={}
     r=simulatePhaseResults('groups',r,m)
     for(const pid of['r32','r16','qf','sf','third','final']){m=generateSimMatches(pid,r,m);r=simulatePhaseResults(pid,r,m)}
-    setLocal(r);setLocalMatches(m)
-    await onSaveMatches(m);await onSave(r)
+    setLocal(r);setLocalMatches(m);await onSaveMatches(m);await onSave(r)
     setSimulating(null);setSaved(true);setTimeout(()=>setSaved(false),2000)
   }
-
   async function resetTournament(){
     setResetting(true)
-    // Delete all results
     await supabase.from('porra_results').delete().neq('phase','__none__')
-    // Delete all matches
     await supabase.from('porra_matches').delete().neq('key','__none__')
-    // Delete only knockout bets (keep groups bets)
     const{data:allBets}=await supabase.from('porra_bets').select('id,phase')
     const knockoutBets=(allBets||[]).filter(b=>b.phase!=='groups')
-    for(const b of knockoutBets){
-      await supabase.from('porra_bets').delete().eq('id',b.id)
-    }
+    for(const b of knockoutBets){await supabase.from('porra_bets').delete().eq('id',b.id)}
     setLocal({});setLocalMatches({})
     setConfirmReset(false);setResetting(false)
     await onLoadAll()
@@ -842,12 +818,11 @@ async function resetUserPassword(userId){
       </div>
 
       <div style={{display:'flex',gap:3,background:C.surfaceHigh,borderRadius:10,padding:4,overflowX:'auto'}}>
-       {[['users',`👥${pending.length>0?`(${pending.length})`:''}`],['matches','⚽ Cruces'],['results','📋 Result.'],['dates','📅 Fechas'],['sim','🎲 Sim'],['scoring','🏅 Pts'],['editbet','✏️ Apuesta']].map(([id,label])=>(
+        {[['users',`👥${pending.length>0?`(${pending.length})`:''}`],['matches','⚽ Cruces'],['results','📋 Result.'],['dates','📅 Fechas'],['sim','🎲 Sim'],['scoring','🏅 Pts'],['editbet','✏️ Apuesta']].map(([id,label])=>(
           <button key={id} onClick={()=>setActiveSection(id)} style={{flex:1,whiteSpace:'nowrap',padding:'8px 4px',border:'none',borderRadius:8,cursor:'pointer',background:activeSection===id?C.accent:'transparent',color:activeSection===id?'#fff':C.textMuted,fontWeight:800,fontSize:11,fontFamily:"'Barlow Condensed',sans-serif"}}>{label}</button>
         ))}
       </div>
 
-      {/* USUARIOS */}
       {activeSection==='users'&&(
         <div style={{display:'flex',flexDirection:'column',gap:12}}>
           {pending.length>0&&(
@@ -872,52 +847,46 @@ async function resetUserPassword(userId){
           )}
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:C.textMuted}}>✅ Aprobados ({approved.length})</div>
           {approved.map(u=>(
-  <div key={u.id} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:'12px 14px'}}>
-    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-      <div><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:15,color:C.text}}>{u.display_name||u.name}</div>{u.display_name&&<div style={{fontSize:11,color:C.textDim}}>@{u.name}</div>}</div>
-      <div style={{display:'flex',alignItems:'center',gap:8}}>
-        <Tag color={C.greenSoft}>Aprobado</Tag>
-        <Btn onClick={()=>{setResetPassUser(u.id);setNewTempPass('');setResetMsg('')}} variant='blue' small>🔑</Btn>
-        <Btn onClick={()=>setConfirmDeleteUser(u.id)} variant='danger' small>🗑</Btn>
-      </div>
-    </div>
-    {confirmDeleteUser===u.id&&(
-      <div style={{marginTop:10,background:`${C.accent}18`,borderRadius:8,padding:'10px 12px',display:'flex',flexDirection:'column',gap:8}}>
-        <div style={{fontSize:12,color:C.accentHover,fontWeight:700,textAlign:'center'}}>¿Seguro que quieres eliminar a {u.display_name||u.name}? Se borrarán todas sus apuestas.</div>
-        <div style={{display:'flex',gap:8}}>
-          <Btn onClick={()=>setConfirmDeleteUser(null)} variant='ghost' full small>Cancelar</Btn>
-          <Btn onClick={()=>{onReject(u.id);setConfirmDeleteUser(null)}} variant='danger' full small>Sí, eliminar</Btn>
-        </div>
-      </div>
-    )}
-    {resetPassUser===u.id&&(
-      <div style={{marginTop:10,background:`${C.blue}18`,borderRadius:8,padding:'10px 12px',display:'flex',flexDirection:'column',gap:8}}>
-        <div style={{fontSize:12,color:C.text,fontWeight:700,textAlign:'center'}}>Nueva contraseña para {u.display_name||u.name} (usuario: @{u.name})</div>
-        <Input value={newTempPass} onChange={e=>setNewTempPass(e.target.value)} placeholder="Mínimo 4 caracteres" style={{fontSize:13,padding:'8px 10px'}}/>
-        {resetMsg&&<div style={{fontSize:12,color:resetMsg.startsWith('✓')?C.greenSoft:C.accentHover,textAlign:'center'}}>{resetMsg}</div>}
-        <div style={{display:'flex',gap:8}}>
-          <Btn onClick={()=>setResetPassUser(null)} variant='ghost' full small>Cancelar</Btn>
-          <Btn onClick={()=>resetUserPassword(u.id)} variant='success' full small>Guardar</Btn>
-        </div>
-      </div>
-    )}
-  </div>
-))}
-
-          {/* RESET CAMPEONATO */}
+            <div key={u.id} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:'12px 14px'}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                <div><div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:15,color:C.text}}>{u.display_name||u.name}</div>{u.display_name&&<div style={{fontSize:11,color:C.textDim}}>@{u.name}</div>}</div>
+                <div style={{display:'flex',alignItems:'center',gap:8}}>
+                  <Tag color={C.greenSoft}>Aprobado</Tag>
+                  <Btn onClick={()=>{setResetPassUser(u.id);setNewTempPass('');setResetMsg('')}} variant='blue' small>🔑</Btn>
+                  <Btn onClick={()=>setConfirmDeleteUser(u.id)} variant='danger' small>🗑</Btn>
+                </div>
+              </div>
+              {confirmDeleteUser===u.id&&(
+                <div style={{marginTop:10,background:`${C.accent}18`,borderRadius:8,padding:'10px 12px',display:'flex',flexDirection:'column',gap:8}}>
+                  <div style={{fontSize:12,color:C.accentHover,fontWeight:700,textAlign:'center'}}>¿Seguro que quieres eliminar a {u.display_name||u.name}? Se borrarán todas sus apuestas.</div>
+                  <div style={{display:'flex',gap:8}}>
+                    <Btn onClick={()=>setConfirmDeleteUser(null)} variant='ghost' full small>Cancelar</Btn>
+                    <Btn onClick={()=>{onReject(u.id);setConfirmDeleteUser(null)}} variant='danger' full small>Sí, eliminar</Btn>
+                  </div>
+                </div>
+              )}
+              {resetPassUser===u.id&&(
+                <div style={{marginTop:10,background:`${C.blue}18`,borderRadius:8,padding:'10px 12px',display:'flex',flexDirection:'column',gap:8}}>
+                  <div style={{fontSize:12,color:C.text,fontWeight:700,textAlign:'center'}}>Nueva contraseña para {u.display_name||u.name}</div>
+                  <Input value={newTempPass} onChange={e=>setNewTempPass(e.target.value)} placeholder="Mínimo 4 caracteres" style={{fontSize:13,padding:'8px 10px'}}/>
+                  {resetMsg&&<div style={{fontSize:12,color:resetMsg.startsWith('✓')?C.greenSoft:C.accentHover,textAlign:'center'}}>{resetMsg}</div>}
+                  <div style={{display:'flex',gap:8}}>
+                    <Btn onClick={()=>setResetPassUser(null)} variant='ghost' full small>Cancelar</Btn>
+                    <Btn onClick={()=>resetUserPassword(u.id)} variant='success' full small>Guardar</Btn>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
           <div style={{height:1,background:C.border,margin:'8px 0'}}/>
           <Card style={{borderColor:`${C.accent}44`}}>
             <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:C.accent,marginBottom:8}}>🔄 Reset del campeonato</div>
-            <div style={{fontSize:12,color:C.textMuted,lineHeight:1.6,marginBottom:14}}>
-              Borra todos los resultados y cruces de eliminatorias. Las apuestas de <b style={{color:C.text}}>grupos se conservan</b>, pero las de fases eliminatorias se eliminan. El torneo vuelve al estado inicial.
-            </div>
+            <div style={{fontSize:12,color:C.textMuted,lineHeight:1.6,marginBottom:14}}>Borra todos los resultados y cruces. Las apuestas de <b style={{color:C.text}}>grupos se conservan</b>, pero las de fases eliminatorias se eliminan.</div>
             {!confirmReset?(
               <Btn onClick={()=>setConfirmReset(true)} variant='danger' full>🔄 Resetear campeonato</Btn>
             ):(
               <div style={{display:'flex',flexDirection:'column',gap:10}}>
-                <div style={{fontSize:13,color:C.accentHover,textAlign:'center',fontWeight:700,background:`${C.accent}18`,borderRadius:8,padding:'10px 12px'}}>
-                  ⚠ ¿Seguro? Se borrarán todos los resultados y las apuestas eliminatorias de todos los usuarios. Esta acción no se puede deshacer.
-                </div>
+                <div style={{fontSize:13,color:C.accentHover,textAlign:'center',fontWeight:700,background:`${C.accent}18`,borderRadius:8,padding:'10px 12px'}}>⚠ ¿Seguro? Se borrarán todos los resultados y las apuestas eliminatorias. No se puede deshacer.</div>
                 <div style={{display:'flex',gap:8}}>
                   <Btn onClick={()=>setConfirmReset(false)} variant='ghost' full disabled={resetting}>Cancelar</Btn>
                   <Btn onClick={resetTournament} variant='danger' full disabled={resetting}>{resetting?'Reseteando…':'Sí, resetear'}</Btn>
@@ -928,7 +897,6 @@ async function resetUserPassword(userId){
         </div>
       )}
 
-      {/* CRUCES */}
       {activeSection==='matches'&&(
         <div style={{display:'flex',flexDirection:'column',gap:14}}>
           <div style={{background:`${C.blue}18`,border:`1px solid ${C.blue}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.textMuted}}>Selecciona los equipos de cada partido. Al guardar, los participantes podrán apostar.</div>
@@ -966,7 +934,6 @@ async function resetUserPassword(userId){
         </div>
       )}
 
-      {/* RESULTADOS */}
       {activeSection==='results'&&(
         <div style={{display:'flex',flexDirection:'column',gap:14}}>
           <div style={{background:`${C.accent}18`,border:`1px solid ${C.accent}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.silver}}>Introduce el ganador de cada partido una vez disputado.</div>
@@ -1001,9 +968,9 @@ async function resetUserPassword(userId){
                     <div style={{fontSize:11,color:C.textMuted,marginBottom:8,letterSpacing:1}}>PARTIDO {idx+1}</div>
                     {p.id==='final'?(
                       <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                        <div style={{fontSize:12,color:C.textMuted,marginBottom:4}}>🏆 Selecciona el campeón (el otro será subcampeón)</div>
+                        <div style={{fontSize:12,color:C.textMuted,marginBottom:4}}>🏆 Selecciona el campeón</div>
                         <div style={{display:'flex',gap:6}}>
-                          {[m.t1,m.t2].map(team=><button key={team} onClick={()=>{setMatchWinner('final',m.id+'_winner',team);setMatchWinner('final',m.id+'_runner',team===m.t1?m.t2:m.t1)}} style={{flex:1,padding:'10px 6px',borderRadius:8,border:`2px solid ${local.final?.[m.id+'_winner']===team?C.gold:C.border}`,background:local.final?.[m.id+'_winner']===team?`${C.gold}22`:C.surfaceHigh,color:local.final?.[m.id+'_winner']===team?C.gold:C.text,fontWeight:700,fontSize:13,fontFamily:'inherit',cursor:'pointer',textAlign:'center',wordBreak:'break-word'}}>{local.final?.[m.id+'_winner']===team&&'🏆 '}{team}</button>)}
+                          {[m.t1,m.t2].map(team=><button key={team} onClick={()=>{setMatchWinner('final',m.id+'_winner',team)}} style={{flex:1,padding:'10px 6px',borderRadius:8,border:`2px solid ${local.final?.[m.id+'_winner']===team?C.gold:C.border}`,background:local.final?.[m.id+'_winner']===team?`${C.gold}22`:C.surfaceHigh,color:local.final?.[m.id+'_winner']===team?C.gold:C.text,fontWeight:700,fontSize:13,fontFamily:'inherit',cursor:'pointer',textAlign:'center',wordBreak:'break-word'}}>{local.final?.[m.id+'_winner']===team&&'🏆 '}{team}</button>)}
                         </div>
                       </div>
                     ):(
@@ -1023,7 +990,27 @@ async function resetUserPassword(userId){
         </div>
       )}
 
-      {/* FECHAS */}
+      {activeSection==='editbet'&&(
+        <AdminBetEditor
+          users={approved}
+          matches={matches}
+          results={results}
+          betsMap={betsMap}
+          scoring={scoring}
+          onSave={async(userId,phaseId,matchId,team)=>{
+            const userPhaseBets={...(betsMap?.[userId]?.[phaseId]||{})}
+            userPhaseBets[matchId]=team
+            const{error}=await supabase.from('porra_bets').upsert(
+              {user_id:userId,phase:phaseId,data:userPhaseBets,updated_at:new Date().toISOString()},
+              {onConflict:'user_id,phase'}
+            )
+            if(error){notify('❌ Error al guardar');return}
+            await onLoadAll()
+            notify('✓ Apuesta guardada')
+          }}
+        />
+      )}
+
       {activeSection==='dates'&&(
         <div style={{display:'flex',flexDirection:'column',gap:14}}>
           <div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.textMuted}}>Las apuestas se cierran <b style={{color:C.gold}}>1 hora antes</b> del inicio de cada fase.</div>
@@ -1045,7 +1032,6 @@ async function resetUserPassword(userId){
         </div>
       )}
 
-      {/* SIMULADOR */}
       {activeSection==='sim'&&(
         <Card style={{borderColor:`${C.blue}44`}}>
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:'#5bb3f5',marginBottom:8}}>🎲 Simulador por fases</div>
@@ -1064,83 +1050,6 @@ async function resetUserPassword(userId){
         </Card>
       )}
 
-      {/* PUNTUACIÓN */}
-      {activeSection==='editbet'&&(
-  <AdminBetEditor
-    users={approved}
-    matches={matches}
-    results={results}
-    betsMap={betsMap}
-    scoring={scoring}
-    onSave={async(userId,phaseId,matchId,team)=>{
-      const userPhaseBets={...(betsMap?.[userId]?.[phaseId]||{})}
-      userPhaseBets[matchId]=team
-      const{error}=await supabase.from('porra_bets').upsert(
-        {user_id:userId,phase:phaseId,data:userPhaseBets,updated_at:new Date().toISOString()},
-        {onConflict:'user_id,phase'}
-      )
-      if(error){notify('❌ Error al guardar');return}
-      await onLoadAll()
-      notify('✓ Apuesta guardada')
-    }}
-  />
-)}
-    {/* Edit bets */}
-    {editingBet?.userId&&editingBet?.phaseId&&(()=>{
-      const phaseMatches=(matches?.[editingBet.phaseId]||[]).filter(m=>m.t1&&m.t2)
-      const userPhaseBets=betsMap?.[editingBet.userId]?.[editingBet.phaseId]||{}
-      const S={...DEFAULT_SCORING,...scoring}
-      const pts=S[editingBet.phaseId]||0
-
-      if(phaseMatches.length===0)return(
-        <Card><div style={{color:C.textMuted,textAlign:'center',padding:20,fontSize:13}}>No hay cruces definidos para esta fase</div></Card>
-      )
-
-      async function saveAdminBet(matchId,team){
-        const updated={...userPhaseBets,[matchId]:team}
-        const{error}=await supabase.from('porra_bets').upsert(
-          {user_id:editingBet.userId,phase:editingBet.phaseId,data:updated,updated_at:new Date().toISOString()},
-          {onConflict:'user_id,phase'}
-        )
-        if(error){notify('❌ Error al guardar');return}
-        await onLoadAll()
-        notify(`✓ Apuesta de ${editingBet.userName} guardada`)
-      }
-
-      return(
-        <div style={{display:'flex',flexDirection:'column',gap:10}}>
-          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:15,color:C.text}}>
-            Apuestas de {editingBet.userName} — {DEFAULT_PHASES.find(p=>p.id===editingBet.phaseId)?.label}
-          </div>
-          <div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.textMuted}}>
-            ✅ Acierto por partido: <b style={{color:C.gold}}>+{pts} pts</b>
-          </div>
-          {phaseMatches.map((m,idx)=>{
-            const bet=userPhaseBets[m.id]
-            const real=results?.[editingBet.phaseId]?.[m.id]
-            const correct=bet&&real&&bet===real
-            return(
-              <Card key={m.id} style={{padding:'13px 15px',borderColor:!bet?`${C.gold}66`:undefined}}>
-                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:9}}>
-                  <div style={{fontSize:11,color:C.textMuted,letterSpacing:1}}>PARTIDO {idx+1}</div>
-                  {!bet&&<Tag color={C.gold}>⚠ Sin apuesta</Tag>}
-                  {correct&&<Tag color={C.greenSoft}>✓ Acertado</Tag>}
-                </div>
-                <div style={{display:'flex',gap:8}}>
-                  {[m.t1,m.t2].map(team=>(
-                    <button key={team} onClick={()=>saveAdminBet(m.id,team)} style={{flex:1,padding:'10px 6px',borderRadius:10,cursor:'pointer',border:`2px solid ${bet===team?C.green:C.border}`,background:bet===team?`${C.green}22`:C.surfaceHigh,color:bet===team?C.greenSoft:C.text,fontWeight:700,fontSize:13,fontFamily:'inherit',transition:'all .15s',textAlign:'center',wordBreak:'break-word'}}>
-                      {bet===team&&'✓ '}{team}
-                    </button>
-                  ))}
-                </div>
-              </Card>
-            )
-          })}
-        </div>
-      )
-    })()}
-  </div>
-)}
       {activeSection==='scoring'&&(
         <>
           <div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.textMuted}}>Modifica los puntos de cada fase. Los cambios afectan a todos en tiempo real.</div>
@@ -1243,7 +1152,7 @@ export default function App(){
     for(const[key,value]of entries){
       if(!value||value.length===0)continue
       const{error}=await supabase.from('porra_matches').upsert({key,value,updated_at:new Date().toISOString()},{onConflict:'key'})
-      if(error){notify('❌ Error: '+error.message);console.error(key,error);return}
+      if(error){notify('❌ Error: '+error.message);return}
     }
     notify('✓ Cruces guardados ('+entries.length+')')
   }
@@ -1258,7 +1167,7 @@ export default function App(){
     notify('✓ Fechas actualizadas')
   }
   async function handleApprove(userId){await supabase.from('porra_users').update({status:'approved'}).eq('id',userId);await loadAll();notify('✓ Usuario aprobado')}
-  async function handleReject(userId){await supabase.from('porra_bets').delete().eq('user_id',userId);await supabase.from('porra_users').delete().eq('id',userId);await loadAll();notify('✓ Usuario rechazado')}
+  async function handleReject(userId){await supabase.from('porra_bets').delete().eq('user_id',userId);await supabase.from('porra_users').delete().eq('id',userId);await loadAll();notify('✓ Usuario eliminado')}
   function handleShare(){
     const url=window.location.href,text='¡Únete a la Porra Mundial 2026 de La Viuda!'
     if(navigator.share){navigator.share({title:'Porra Mundial 2026',text,url}).catch(()=>{})}
@@ -1325,7 +1234,6 @@ export default function App(){
           <Btn onClick={handleLogout} variant='ghost' small>Salir</Btn>
         </div>
       </header>
-
       <main style={{maxWidth:560,margin:'0 auto',padding:'16px 14px'}}>
         {activeTab==='ranking'&&<Leaderboard users={users} betsMap={betsMap} results={results} matches={matches} scoring={scoring} phases={phases} currentUserId={session.id} onViewUser={setViewingUser}/>}
         {activeTab==='scoring'&&<ScoringScreen scoring={scoring}/>}
@@ -1350,10 +1258,9 @@ export default function App(){
           </>
         )}
         {activeTab==='admin'&&session.role==='admin'&&(
-         <AdminPanel results={results} matches={matches} scoring={scoring} phases={phases} users={users} betsMap={betsMap} onSave={handleSaveResults} onSaveMatches={handleSaveMatches} onSaveScoring={handleSaveScoring} onSavePhases={handleSavePhases} onApprove={handleApprove} onReject={handleReject} onLoadAll={loadAll}/>
+          <AdminPanel results={results} matches={matches} scoring={scoring} phases={phases} users={users} betsMap={betsMap} onSave={handleSaveResults} onSaveMatches={handleSaveMatches} onSaveScoring={handleSaveScoring} onSavePhases={handleSavePhases} onApprove={handleApprove} onReject={handleReject} onLoadAll={loadAll}/>
         )}
       </main>
-
       <nav style={{position:'fixed',bottom:0,left:0,right:0,background:C.surface,borderTop:`1px solid ${C.border}`,display:'flex',justifyContent:'center',zIndex:100}}>
         {TABS.map(t=>(
           <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{flex:1,maxWidth:120,padding:'9px 0 11px',border:'none',background:activeTab===t.id?`${C.accent}1a`:'transparent',color:activeTab===t.id?C.accentHover:C.textMuted,cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:3,borderTop:`2px solid ${activeTab===t.id?C.accent:'transparent'}`,transition:'all .15s'}}>
