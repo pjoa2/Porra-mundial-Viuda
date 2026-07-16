@@ -292,9 +292,9 @@ function ThirdPlaceBet({thirdBet,results,matches,onChange,disabled,scoring}){
       {!thirdMatch?<Card><div style={{color:C.textMuted,textAlign:'center',padding:24,fontSize:14}}>⏳ El administrador aún no ha publicado este partido</div></Card>:(
         <Card style={{padding:'13px 15px'}}>
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:C.text,marginBottom:10}}>🥉 ¿Quién gana el 3er puesto?</div>
-          <div style={{display:'flex',gap:8}}>
-            border:`2px solid ${local[thirdMatch.id]===team?C.green:C.border}`,background:local[thirdMatch.id]===team?`${C.green}22`:C.surfaceHigh,color:local[thirdMatch.id]===team?C.greenSoft:C.text,fontWeight:700,fontSize:14,fontFamily:'inherit',transition:'all .15s',textAlign:'center',wordBreak:'break-word'}}>{local[thirdMatch.id]===team&&'✓ '}{team}</button>)}
-          </div>
+         <div style={{display:'flex',gap:8}}>
+  {[thirdMatch.t1,thirdMatch.t2].map(team=><button key={team} disabled={disabled} onClick={()=>!disabled&&handleChange(thirdMatch.id,team)} style={{flex:1,padding:'12px 8px',borderRadius:10,cursor:disabled?'not-allowed':'pointer',border:`2px solid ${local[thirdMatch.id]===team?C.green:C.border}`,background:local[thirdMatch.id]===team?`${C.green}22`:C.surfaceHigh,color:local[thirdMatch.id]===team?C.greenSoft:C.text,fontWeight:700,fontSize:14,fontFamily:'inherit',transition:'all .15s',textAlign:'center',wordBreak:'break-word'}}>{local[thirdMatch.id]===team&&'✓ '}{team}</button>)}
+</div>
         </Card>
       )}
     </div>
