@@ -293,7 +293,7 @@ function ThirdPlaceBet({thirdBet,results,matches,onChange,disabled,scoring}){
         <Card style={{padding:'13px 15px'}}>
           <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:C.text,marginBottom:10}}>🥉 ¿Quién gana el 3er puesto?</div>
           <div style={{display:'flex',gap:8}}>
-            {[thirdMatch.t1,thirdMatch.t2].map(team=><button key={team} disabled={disabled} onClick={()=>!disabled&&handleChange(thirdMatch.id,team)} style={{flex:1,padding:'12px 8px',borderRadius:10,cursor:disabled?'not-allowed':'pointer',border:`2px solid ${local[thirdMatch.id]===team?C.silver:C.border}`,background:local[thirdMatch.id]===team?`${C.silver}22`:C.surfaceHigh,color:local[thirdMatch.id]===team?C.silver:C.text,fontWeight:700,fontSize:14,fontFamily:'inherit',transition:'all .15s',textAlign:'center',wordBreak:'break-word'}}>{local[thirdMatch.id]===team&&'✓ '}{team}</button>)}
+            border:`2px solid ${local[thirdMatch.id]===team?C.green:C.border}`,background:local[thirdMatch.id]===team?`${C.green}22`:C.surfaceHigh,color:local[thirdMatch.id]===team?C.greenSoft:C.text,fontWeight:700,fontSize:14,fontFamily:'inherit',transition:'all .15s',textAlign:'center',wordBreak:'break-word'}}>{local[thirdMatch.id]===team&&'✓ '}{team}</button>)}
           </div>
         </Card>
       )}
@@ -309,18 +309,18 @@ function FinalBets({finalBet,results,matches,onChange,disabled,scoring}){
   function handleChange(key,team){setLocal(prev=>({...prev,[key]:team}));onChange(key,team)}
   return(
     <div style={{display:'flex',flexDirection:'column',gap:14}}>
-      <div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.silver}}>🏆 <b style={{color:C.gold}}>Campeón +{S.final_winner}pts</b> · 🥈 <b style={{color:C.silver}}>Subcampeón +{S.final_runner}pts</b></div>
+      <div style={{background:`${C.gold}18`,border:`1px solid ${C.gold}33`,borderRadius:10,padding:'9px 13px',fontSize:12,color:C.silver}}>🏆 <b style={{color:C.gold}}>Campeón +{S.final_winner}pts</b></div>
       {!finalMatch?<Card><div style={{color:C.textMuted,textAlign:'center',padding:24,fontSize:14}}>⏳ El administrador aún no ha publicado la final</div></Card>:(
-        <>
-          {[{key:finalMatch.id+'_winner',label:'🏆 Campeón'},{key:finalMatch.id+'_runner',label:'🥈 Subcampeón'}].map(({key,label})=>(
-            <Card key={key} style={{padding:'13px 15px'}}>
-              <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:C.text,marginBottom:10}}>{label}</div>
-              <div style={{display:'flex',gap:8}}>
-                {[finalMatch.t1,finalMatch.t2].map(team=><button key={team} disabled={disabled} onClick={()=>!disabled&&handleChange(key,team)} style={{flex:1,padding:'10px 6px',borderRadius:10,cursor:disabled?'not-allowed':'pointer',border:`2px solid ${local[key]===team?C.gold:C.border}`,background:local[key]===team?`${C.gold}22`:C.surfaceHigh,color:local[key]===team?C.gold:C.text,fontWeight:700,fontSize:13,fontFamily:'inherit',transition:'all .15s',textAlign:'center',wordBreak:'break-word'}}>{local[key]===team&&'✓ '}{team}</button>)}
-              </div>
-            </Card>
-          ))}
-        </>
+        <Card style={{padding:'13px 15px'}}>
+          <div style={{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:16,color:C.text,marginBottom:10}}>🏆 ¿Quién gana la final?</div>
+          <div style={{display:'flex',gap:8}}>
+            {[finalMatch.t1,finalMatch.t2].map(team=>(
+              <button key={team} disabled={disabled} onClick={()=>!disabled&&handleChange(finalMatch.id+'_winner',team)} style={{flex:1,padding:'10px 6px',borderRadius:10,cursor:disabled?'not-allowed':'pointer',border:`2px solid ${local[finalMatch.id+'_winner']===team?C.green:C.border}`,background:local[finalMatch.id+'_winner']===team?`${C.green}22`:C.surfaceHigh,color:local[finalMatch.id+'_winner']===team?C.greenSoft:C.text,fontWeight:700,fontSize:13,fontFamily:'inherit',transition:'all .15s',textAlign:'center',wordBreak:'break-word'}}>
+                {local[finalMatch.id+'_winner']===team&&'✓ '}{team}
+              </button>
+            ))}
+          </div>
+        </Card>
       )}
     </div>
   )
